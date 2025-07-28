@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>캠스 업무 일지</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>캠스 업무 일지</h1>
+            <div class="user-info">
+                <span id="current-user">사용자: 게스트</span>
+                <span id="user-balance">잔액: 0</span>
+            </div>
+        </header>
+
+        <nav>
+            <button id="login-btn" class="nav-btn">로그인</button>
+            <button id="register-btn" class="nav-btn">회원가입</button>
+            <button id="create-content-btn" class="nav-btn">컨텐츠 생성</button>
+            <button id="logout-btn" class="nav-btn" style="display: none;">로그아웃</button>
+        </nav>
+
+        <!-- 로그인 모달 -->
+        <div id="login-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>로그인</h2>
+                <input type="text" id="login-username" placeholder="사용자명">
+                <button id="login-submit">로그인</button>
+            </div>
+        </div>
+
+        <!-- 회원가입 모달 -->
+        <div id="register-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>회원가입</h2>
+                <input type="text" id="register-username" placeholder="사용자명">
+                <button id="register-submit">회원가입</button>
+            </div>
+        </div>
+
+        <!-- 컨텐츠 생성 모달 -->
+        <div id="content-modal" class="modal">
+            <div class="modal-content rich-content-modal">
+                <span class="close">&times;</span>
+                <h2>컨텐츠 생성</h2>
+                
+
+                
+                <input type="text" id="content-title" placeholder="제목">
+                
+                <!-- 리치 텍스트 에디터 -->
+                <div class="rich-editor-container">
+                    <div class="editor-toolbar">
+                        <div class="toolbar-group">
+                            <button type="button" onclick="formatText('bold')" title="굵게"><b>B</b></button>
+                            <button type="button" onclick="formatText('italic')" title="기울임"><i>I</i></button>
+                            <button type="button" onclick="formatText('underline')" title="밑줄"><u>U</u></button>
+                        </div>
+                        <div class="toolbar-group">
+                            <button type="button" onclick="formatText('insertOrderedList')" title="순서 목록">1.</button>
+                            <button type="button" onclick="formatText('insertUnorderedList')" title="불릿 목록">•</button>
+                        </div>
+                        <div class="toolbar-group">
+                            <button type="button" onclick="insertLink()" title="링크 삽입">🔗</button>
+                            <button type="button" onclick="insertImageDialog()" title="이미지 삽입">🖼️</button>
+                            <button type="button" onclick="insertVideoDialog()" title="동영상 삽입">🎥</button>
+                            <button type="button" onclick="insertAudioDialog()" title="음악 삽입">🎧</button>
+                        </div>
+                        <div class="toolbar-group">
+                            <input type="file" id="inline-file-input" accept="image/*,video/*,audio/*" style="display: none" onchange="insertFileInline(this)">
+                            <button type="button" onclick="document.getElementById('inline-file-input').click()" title="파일 업로드">📁</button>
+                        </div>
+                    </div>
+                    <div id="rich-editor" contenteditable="true" placeholder="내용을 입력하세요... 파일을 드래그하여 직접 삽입할 수도 있습니다."></div>
+                </div>
+                
+                <!-- 파일 업로드 섹션 -->
+                <div class="file-upload-section">
+                    <label for="file-upload">파일 업로드:</label>
+                    <input type="file" id="file-upload" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt">
+                    <div id="file-preview" class="file-preview"></div>
+                </div>
+                
+                <!-- URL 입력 -->
+                <input type="url" id="content-url" placeholder="외부 링크 URL (선택사항)">
+                
+                <!-- 태그 입력 -->
+                <input type="text" id="content-tags" placeholder="태그 (쉼표로 구분)">
+                
+                <button id="content-submit">생성</button>
+            </div>
+        </div>
+
+        <!-- 투자 모달 -->
+        <div id="invest-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>투자하기</h2>
+                <p id="invest-content-title"></p>
+                <input type="number" id="invest-amount" placeholder="투자 금액" min="1">
+                <button id="invest-submit">투자</button>
+            </div>
+        </div>
+
+        <main>
+            <section class="content-list">
+                <h2>컨텐츠 목록</h2>
+                <div id="contents-container">
+                    <!-- 컨텐츠들이 여기에 동적으로 추가됩니다 -->
+                </div>
+            </section>
+
+            <section class="my-investments" style="display: none;">
+                <h2>내 투자 현황</h2>
+                <div id="investments-container">
+                    <!-- 투자 현황이 여기에 표시됩니다 -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="api-client.js"></script>
+    <script src="script.js"></script>
+    <script src="media-functions.js"></script>
+</body>
+</html>
