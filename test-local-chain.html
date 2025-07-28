@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로컬 체인 테스트</title>
+</head>
+<body>
+    <h1>로컬 체인 기능 테스트</h1>
+    <button onclick="testLocalChain()">로컬 체인 테스트</button>
+    <button onclick="testInitialization()">초기화 테스트</button>
+    <div id="output"></div>
+
+    <script src="local-chain.js"></script>
+    <script>
+        function testLocalChain() {
+            const output = document.getElementById('output');
+            
+            try {
+                if (typeof LocalChain === 'undefined') {
+                    output.innerHTML = '<p style="color: red;">❌ LocalChain 클래스가 로드되지 않았습니다.</p>';
+                    return;
+                }
+                
+                const chain = new LocalChain('testuser');
+                const chainInfo = chain.getChainInfo();
+                
+                output.innerHTML = `
+                    <h3>✅ 로컬 체인 테스트 성공!</h3>
+                    <p>사용자: ${chainInfo.username}</p>
+                    <p>블록 수: ${chainInfo.blockCount}</p>
+                    <p>검증: ${chainInfo.validation.valid ? '✅' : '❌'}</p>
+                `;
+                
+                console.log('로컬 체인 정보:', chainInfo);
+                
+            } catch (error) {
+                output.innerHTML = `<p style="color: red;">❌ 오류: ${error.message}</p>`;
+                console.error('로컬 체인 테스트 오류:', error);
+            }
+        }
+        
+        function testInitialization() {
+            const output = document.getElementById('output');
+            
+            try {
+                // LaborValueCoinSystem 클래스가 있는지 확인
+                if (typeof LaborValueCoinSystem === 'undefined') {
+                    output.innerHTML = '<p style="color: red;">❌ LaborValueCoinSystem 클래스가 로드되지 않았습니다.</p>';
+                    return;
+                }
+                
+                // 시스템 인스턴스 생성 테스트
+                const testSystem = new LaborValueCoinSystem();
+                
+                if (typeof testSystem.initializeLocalChain === 'function') {
+                    output.innerHTML = '<p style="color: green;">✅ initializeLocalChain 메서드가 존재합니다.</p>';
+                } else {
+                    output.innerHTML = '<p style="color: red;">❌ initializeLocalChain 메서드가 없습니다.</p>';
+                }
+                
+            } catch (error) {
+                output.innerHTML = `<p style="color: red;">❌ 초기화 테스트 오류: ${error.message}</p>`;
+                console.error('초기화 테스트 오류:', error);
+            }
+        }
+    </script>
+</body>
+</html>
