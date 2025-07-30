@@ -384,6 +384,62 @@ app.get('/api/users/:username/investments', async (req, res) => {
     }
 });
 
+// 🔍 디버깅: 모든 사용자 계수 조회
+app.get('/api/debug/coefficients', async (req, res) => {
+    try {
+        const { getPool } = require('./db/postgresql');
+        const client = getPool();
+        
+        const result = await client.query(`
+            SELECT username, coefficient, coefficient_updated_at, balance, total_invested, total_dividends
+            FROM users 
+            ORDER BY coefficient DESC
+        `);
+        
+        res.json({
+            success: true,
+            users: result.rows,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('계수 조회 오류:', error);
+        res.status(500).json({ error: '계수 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 🚀 디버깅: 수동 계수 업데이트 트리거
+app.post('/api/debug/update-coefficient/:username', async (req, res) => {
+    try {
+        const { username } = req.params;
+        const { UserModel } = require('./db/postgresql');
+        
+        console.log(`🔧 ${username} 계수 수동 업데이트 시작...`);
+        
+        // 성과 계산
+        const performance = await UserModel.calculateUserPerformance(username);
+        console.log(`📊 ${username} 성과 점수: ${performance}`);
+        
+        // 계수 업데이트
+        const newCoefficient = await UserModel.updateCoefficient(username, performance, 'manual_debug');
+        console.log(`✅ ${username} 계수 업데이트 완료: ${newCoefficient}`);
+        
+        // 캐시 무효화
+        coefficientCalculator.invalidateCache();
+        
+        res.json({
+            success: true,
+            username,
+            oldPerformance: 1.0,
+            newPerformance: performance,
+            newCoefficient,
+            message: `${username} 계수가 ${newCoefficient.toFixed(4)}로 업데이트되었습니다.`
+        });
+    } catch (error) {
+        console.error('수동 계수 업데이트 오류:', error);
+        res.status(500).json({ error: '계수 업데이트 중 오류가 발생했습니다.' });
+    }
+});
+
 // 정적 파일 서빙 (index.html 등)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));

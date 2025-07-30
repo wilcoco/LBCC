@@ -203,48 +203,76 @@ class UserModel {
     }
     
     static async calculateUserPerformance(username, daysPeriod = 30) {
-        const client = getPool();
+    const client = getPool();
+    
+    console.log(`🔍 ${username} 성과 계산 시작 (기간: ${daysPeriod}일)`);
+    
+    // 최근 N일간 투자 성과 계산
+    const result = await client.query(`
+        SELECT 
+            i.content_id,
+            i.amount,
+            i.created_at,
+            (
+                SELECT COALESCE(SUM(i2.amount), 0)
+                FROM investments i2 
+                WHERE i2.content_id = i.content_id 
+                AND i2.created_at > i.created_at
+            ) as subsequent_investments
+        FROM investments i
+        WHERE i.username = $1 
+        AND i.created_at > NOW() - INTERVAL '$2 days'
+        ORDER BY i.created_at DESC
+    `, [username, daysPeriod]);
+    
+    console.log(`📊 ${username} 투자 기록: ${result.rows.length}건`);
+    
+    if (result.rows.length === 0) {
+        console.log(`⚠️ ${username} 투자 기록 없음 - 기본 계수 1.0 반환`);
+        return 1.0; // 기본 계수
+    }
+    
+    // 투자 매력도 지수 계산
+    let totalScore = 0;
+    let totalWeight = 0;
+    let goodInvestments = 0;
+    let totalInvestments = result.rows.length;
+    
+    result.rows.forEach((investment, index) => {
+        const attractionRate = investment.subsequent_investments / investment.amount;
+        const daysSince = (Date.now() - new Date(investment.created_at).getTime()) / (24 * 60 * 60 * 1000);
+        const timeWeight = Math.exp(-daysSince / 7); // 7일 반감기
         
-        // 최근 N일간 투자 성과 계산
-        const result = await client.query(`
-            SELECT 
-                i.content_id,
-                i.amount,
-                i.created_at,
-                (
-                    SELECT COALESCE(SUM(i2.amount), 0)
-                    FROM investments i2 
-                    WHERE i2.content_id = i.content_id 
-                    AND i2.created_at > i.created_at
-                ) as subsequent_investments
-            FROM investments i
-            WHERE i.username = $1 
-            AND i.created_at > NOW() - INTERVAL '$2 days'
-            ORDER BY i.created_at DESC
-        `, [username, daysPeriod]);
+        console.log(`  📈 투자 ${index + 1}: ${investment.amount}코인 → +${investment.subsequent_investments}코인 (비율: ${attractionRate.toFixed(2)})`);
         
-        if (result.rows.length === 0) {
-            return 1.0; // 기본 계수
+        // 좋은 투자 카운트 (후속 투자가 원래 투자의 50% 이상)
+        if (attractionRate >= 0.5) {
+            goodInvestments++;
         }
         
-        // 투자 매력도 지수 계산
-        let totalScore = 0;
-        let totalWeight = 0;
-        
-        result.rows.forEach(investment => {
-            const attractionRate = investment.subsequent_investments / investment.amount;
-            const daysSince = (Date.now() - new Date(investment.created_at).getTime()) / (24 * 60 * 60 * 1000);
-            const timeWeight = Math.exp(-daysSince / 7); // 7일 반감기
-            
-            totalScore += attractionRate * timeWeight;
-            totalWeight += timeWeight;
-        });
-        
-        const averagePerformance = totalWeight > 0 ? totalScore / totalWeight : 0;
-        
-        // 성과를 계수로 변환 (0.5 ~ 2.0 범위)
-        return Math.max(0.5, Math.min(2.0, 0.5 + averagePerformance));
-    }
+        totalScore += attractionRate * timeWeight;
+        totalWeight += timeWeight;
+    });
+    
+    const averagePerformance = totalWeight > 0 ? totalScore / totalWeight : 0;
+    const successRate = goodInvestments / totalInvestments;
+    
+    console.log(`📊 ${username} 성과 분석:`);
+    console.log(`  - 평균 매력도: ${averagePerformance.toFixed(4)}`);
+    console.log(`  - 성공률: ${(successRate * 100).toFixed(1)}% (${goodInvestments}/${totalInvestments})`);
+    
+    // 개선된 계수 계산: 평균 성과 + 성공률 보너스
+    let baseCoefficient = 0.8 + (averagePerformance * 0.4); // 0.8 ~ 1.2 기본 범위
+    let successBonus = successRate * 0.5; // 최대 0.5 보너스
+    let finalCoefficient = baseCoefficient + successBonus;
+    
+    // 계수 범위 제한 (0.1 ~ 5.0)
+    finalCoefficient = Math.max(0.1, Math.min(5.0, finalCoefficient));
+    
+    console.log(`🎯 ${username} 최종 계수: ${finalCoefficient.toFixed(4)} (기본: ${baseCoefficient.toFixed(4)} + 보너스: ${successBonus.toFixed(4)})`);
+    
+    return finalCoefficient;
+}
     
     static async batchUpdateCoefficients() {
         const client = getPool();
