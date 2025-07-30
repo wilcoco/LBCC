@@ -337,7 +337,7 @@ app.get('/api/users/:username', async (req, res) => {
     }
 });
 
-// 🎯 사용자 계수 및 성과 정보 조회
+// 🎯 사용자 계수 및 성과 정보 조회 (새 사용자 안전 처리)
 app.get('/api/users/:username/performance', async (req, res) => {
     try {
         const { username } = req.params;
@@ -352,22 +352,80 @@ app.get('/api/users/:username/performance', async (req, res) => {
         }
         
         console.log(`📊 ${username} 성과 요약 계산 시작...`);
-        const performanceSummary = await coefficientCalculator.getUserPerformanceSummary(username);
+        
+        // 새 사용자를 위한 안전한 성과 요약 처리
+        let performanceSummary;
+        try {
+            performanceSummary = await coefficientCalculator.getUserPerformanceSummary(username);
+        } catch (summaryError) {
+            console.warn(`⚠️ ${username} 성과 요약 계산 오류, 기본값 사용:`, summaryError.message);
+            
+            // 새 사용자를 위한 기본 성과 요약 생성
+            performanceSummary = {
+                username: user.username,
+                currentCoefficient: parseFloat(user.coefficient || 1.0),
+                balance: user.balance || 0,
+                totalInvested: user.total_invested || 0,
+                totalDividends: user.total_dividends || 0,
+                totalEffectiveValue: 0,
+                coefficientHistory: [],
+                lastUpdated: user.coefficient_updated_at || new Date().toISOString(),
+                isNewUser: true
+            };
+        }
         
         if (!performanceSummary) {
-            console.log(`⚠️ ${username} 성과 요약 없음`);
-            return res.status(404).json({ error: '성과 정보를 찾을 수 없습니다.' });
+            console.log(`⚠️ ${username} 성과 요약 없음, 기본값 생성`);
+            
+            // 대체 기본값 생성
+            performanceSummary = {
+                username: user.username,
+                currentCoefficient: 1.0,
+                balance: user.balance || 0,
+                totalInvested: 0,
+                totalDividends: 0,
+                totalEffectiveValue: 0,
+                coefficientHistory: [],
+                lastUpdated: new Date().toISOString(),
+                isNewUser: true
+            };
         }
         
         console.log(`✅ ${username} 성과 요약 완료:`, {
             coefficient: performanceSummary.currentCoefficient,
             totalInvested: performanceSummary.totalInvested,
-            totalDividends: performanceSummary.totalDividends
+            totalDividends: performanceSummary.totalDividends,
+            isNewUser: performanceSummary.isNewUser || false
         });
         
         res.json(performanceSummary);
+        
     } catch (error) {
         console.error(`❌ ${req.params.username} 성과 정보 조회 오류:`, error);
+        
+        // 어떤 오류가 발생해도 기본 성과 정보 제공
+        try {
+            const { UserModel } = require('./db/postgresql');
+            const user = await UserModel.findByUsername(req.params.username);
+            if (user) {
+                console.log(`🔄 ${req.params.username} 비상 상황에서 기본 성과 정보 제공`);
+                return res.json({
+                    username: user.username,
+                    currentCoefficient: 1.0,
+                    balance: user.balance || 0,
+                    totalInvested: 0,
+                    totalDividends: 0,
+                    totalEffectiveValue: 0,
+                    coefficientHistory: [],
+                    lastUpdated: new Date().toISOString(),
+                    isNewUser: true,
+                    fallbackMode: true
+                });
+            }
+        } catch (fallbackError) {
+            console.error(`❌ 비상 상황 처리도 실패:`, fallbackError);
+        }
+        
         res.status(500).json({ 
             error: '성과 정보 조회 중 오류가 발생했습니다.',
             details: error.message 
