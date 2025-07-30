@@ -15,15 +15,36 @@ app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname)));
 
-// 데이터베이스 초기화
+// 데이터베이스 초기화 (자동 재시도 포함)
 console.log('🚀 서버 시작 - 데이터베이스 초기화 시작...');
-initializeDatabase()
-    .then(() => {
-        console.log('✅ 데이터베이스 초기화 완료!');
-    })
-    .catch((error) => {
-        console.error('❌ 데이터베이스 초기화 실패:', error);
-    });
+
+async function initializeDatabaseWithRetry() {
+    const maxRetries = 5;
+    let retryCount = 0;
+    
+    while (retryCount < maxRetries) {
+        try {
+            console.log(`🔄 데이터베이스 초기화 시도 ${retryCount + 1}/${maxRetries}...`);
+            await initializeDatabase();
+            console.log('✅ 데이터베이스 초기화 완료!');
+            return;
+        } catch (error) {
+            retryCount++;
+            console.error(`❌ 데이터베이스 초기화 실패 (시도 ${retryCount}/${maxRetries}):`, error.message);
+            
+            if (retryCount < maxRetries) {
+                const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // 지수 백오프
+                console.log(`⏳ ${delay}ms 후 재시도...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+                console.error('💥 데이터베이스 초기화 최종 실패 - 서버는 계속 실행되지만 DB 기능 사용 불가');
+            }
+        }
+    }
+}
+
+// 비동기 초기화 실행
+initializeDatabaseWithRetry();
 
 // 이제 모든 데이터는 PostgreSQL 데이터베이스에 저장됩니다.
 // 메모리 기반 저장소는 더 이상 사용하지 않습니다.
