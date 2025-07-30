@@ -35,6 +35,29 @@ header h1 {
     font-weight: 700;
 }
 
+/* 버전 표시 스타일 */
+.version {
+    font-size: 0.4em;
+    color: #7f8c8d;
+    font-weight: normal;
+    background: linear-gradient(135deg, #3498db, #2ecc71);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    padding: 2px 8px;
+    border: 1px solid #bdc3c7;
+    border-radius: 12px;
+    margin-left: 10px;
+    display: inline-block;
+    vertical-align: middle;
+    animation: versionPulse 3s ease-in-out infinite;
+}
+
+@keyframes versionPulse {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
 .user-info {
     display: flex;
     flex-direction: column;
