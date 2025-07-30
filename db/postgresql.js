@@ -351,6 +351,27 @@ class ContentModel {
         };
     }
 
+    static async addInvestment(contentId, investmentData) {
+        const client = getPool();
+        
+        try {
+            // investments 테이블에 새 투자 기록 추가
+            const result = await client.query(`
+                INSERT INTO investments (content_id, username, amount, created_at)
+                VALUES ($1, $2, $3, $4)
+                RETURNING *
+            `, [contentId, investmentData.username, investmentData.amount, new Date()]);
+            
+            console.log(`💰 새 투자 기록 생성: ${investmentData.username} → 컨텐츠 ${contentId} (${investmentData.amount}코인)`);
+            
+            return result.rows[0];
+            
+        } catch (error) {
+            console.error('❌ 투자 기록 생성 실패:', error);
+            throw error;
+        }
+    }
+
     static async updateInvestment(contentId, investorData, newTotalInvestment) {
         const client = getPool();
         

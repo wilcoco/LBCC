@@ -157,25 +157,21 @@ app.post('/api/invest', async (req, res) => {
         // 🚀 계수 기반 배당 분배 계산
         const dividendDistribution = await coefficientCalculator.calculateDividendDistribution(contentId, amount);
         
-        // 배당 지급
+        // 배당 지급 (addDividend 메서드 사용)
         for (const dividend of dividendDistribution) {
-            await UserModel.updateBalance(
-                dividend.username, 
-                (await UserModel.findByUsername(dividend.username)).balance + dividend.amount
-            );
-            
+            await UserModel.addDividend(dividend.username, dividend.amount);
             console.log(`💰 배당 지급: ${dividend.username} +${dividend.amount} (계수: ${dividend.coefficient.toFixed(4)}, 지분: ${(dividend.share * 100).toFixed(2)}%)`);
         }
         
-        // 새 투자 기록
+        // 새 투자 기록 (investments 테이블에 추가)
         const investment = await ContentModel.addInvestment(contentId, {
             username,
-            amount,
-            timestamp: new Date().toISOString()
+            amount
         });
         
-        // 투자자 잔액 차감
+        // 투자자 처리: 잔액 차감 + 총 투자액 업데이트
         await UserModel.updateBalance(username, user.balance - amount);
+        await UserModel.addInvestment(username, { contentId, amount });
         
         // 🎯 투자 후 효과적 지분 업데이트
         const userCoefficient = await coefficientCalculator.getUserCoefficient(username);
