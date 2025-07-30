@@ -182,7 +182,24 @@ class CoefficientCalculator {
     }
 
     /**
-     * 사용자의 투자 성과 요약 정보
+     * 컨텐츠의 모든 투자 기록 조회
+     */
+    async getContentInvestments(contentId) {
+        const { getPool } = require('./db/postgresql');
+        const client = getPool();
+        
+        const result = await client.query(`
+            SELECT username, amount, created_at
+            FROM investments 
+            WHERE content_id = $1
+            ORDER BY created_at ASC
+        `, [contentId]);
+        
+        return result.rows;
+    }
+
+    /**
+     * 사용자 성과 요약 정보 조회
      */
     async getUserPerformanceSummary(username) {
         const { UserModel } = require('./db/postgresql');

@@ -181,17 +181,41 @@ app.post('/api/invest', async (req, res) => {
         const userCoefficient = await coefficientCalculator.getUserCoefficient(username);
         await coefficientCalculator.updateInvestmentEffectiveAmount(investment.id, username, amount);
         
+        // 🚀 실시간 계수 업데이트: 투자자 + 기존 투자자들
+        console.log('📊 실시간 계수 업데이트 시작...');
+        
+        // 1. 현재 투자자 계수 업데이트
+        const newInvestorPerformance = await UserModel.calculateUserPerformance(username);
+        await UserModel.updateCoefficient(username, newInvestorPerformance, 'investment_made');
+        console.log(`🎯 투자자 ${username} 계수 업데이트: ${newInvestorPerformance.toFixed(4)}`);
+        
+        // 2. 해당 컨텐츠의 기존 투자자들 계수 업데이트 (후속 투자 유입으로 성과 향상)
+        const contentInvestments = await coefficientCalculator.getContentInvestments(contentId);
+        const uniqueInvestors = [...new Set(contentInvestments.map(inv => inv.username).filter(u => u !== username))];
+        
+        for (const investorUsername of uniqueInvestors) {
+            const investorPerformance = await UserModel.calculateUserPerformance(investorUsername);
+            await UserModel.updateCoefficient(investorUsername, investorPerformance, 'attracted_investment');
+            console.log(`📈 기존 투자자 ${investorUsername} 계수 업데이트: ${investorPerformance.toFixed(4)}`);
+        }
+        
+        // 캐시 무효화 (계수 변경으로 인한)
+        coefficientCalculator.invalidateCache();
+        console.log('✅ 실시간 계수 업데이트 완료!');
+        
         // 업데이트된 사용자 정보
         const updatedUser = await UserModel.findByUsername(username);
+        const finalCoefficient = await coefficientCalculator.getUserCoefficient(username);
         
         res.json({ 
             success: true, 
             investment,
             newBalance: updatedUser.balance,
-            userCoefficient: userCoefficient,
-            effectiveAmount: amount * userCoefficient,
+            userCoefficient: finalCoefficient,
+            effectiveAmount: amount * finalCoefficient,
             dividendsDistributed: dividendDistribution,
-            message: `${amount} 코인 투자 완료! (효과적 지분: ${(amount * userCoefficient).toFixed(2)})`
+            coefficientUpdated: true,
+            message: `${amount} 코인 투자 완료! (효과적 지분: ${(amount * finalCoefficient).toFixed(2)}, 계수: ×${finalCoefficient.toFixed(4)})`
         });
         
     } catch (error) {
