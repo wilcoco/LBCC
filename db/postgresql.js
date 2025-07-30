@@ -5,10 +5,53 @@ let pool = null;
 
 function getPool() {
     if (!pool) {
-        pool = new Pool({
-            connectionString: process.env.DATABASE_URL,
-            ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-        });
+        // 환경변수 확인 및 로깅
+        console.log('🔍 데이터베이스 연결 설정 확인:');
+        console.log('NODE_ENV:', process.env.NODE_ENV);
+        console.log('DATABASE_URL 존재:', !!process.env.DATABASE_URL);
+        
+        if (!process.env.DATABASE_URL) {
+            console.error('❌ DATABASE_URL 환경변수가 설정되지 않았습니다!');
+            throw new Error('DATABASE_URL 환경변수가 필요합니다.');
+        }
+        
+        // DATABASE_URL의 일부만 로깅 (보안상 전체 URL은 노출하지 않음)
+        const dbUrl = process.env.DATABASE_URL;
+        const urlParts = dbUrl.match(/^(postgres:\/\/[^:]+):[^@]+@([^:]+):(\d+)\/(.+)$/);
+        if (urlParts) {
+            console.log('📊 DB 연결 정보:', {
+                protocol: urlParts[1].split('://')[0],
+                host: urlParts[2],
+                port: urlParts[3],
+                database: urlParts[4]
+            });
+        }
+        
+        try {
+            pool = new Pool({
+                connectionString: process.env.DATABASE_URL,
+                ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+                // 연결 타임아웃 및 재시도 설정
+                connectionTimeoutMillis: 10000,
+                idleTimeoutMillis: 30000,
+                max: 10
+            });
+            
+            console.log('✅ PostgreSQL 연결 풀 생성 완료');
+            
+            // 연결 테스트
+            pool.on('connect', () => {
+                console.log('🔗 PostgreSQL 데이터베이스 연결 성공');
+            });
+            
+            pool.on('error', (err) => {
+                console.error('❌ PostgreSQL 연결 오류:', err);
+            });
+            
+        } catch (error) {
+            console.error('❌ PostgreSQL 연결 풀 생성 실패:', error);
+            throw error;
+        }
     }
     return pool;
 }
