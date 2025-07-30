@@ -10,13 +10,41 @@ function getPool() {
         console.log('NODE_ENV:', process.env.NODE_ENV);
         console.log('DATABASE_URL 존재:', !!process.env.DATABASE_URL);
         
-        if (!process.env.DATABASE_URL) {
-            console.error('❌ DATABASE_URL 환경변수가 설정되지 않았습니다!');
-            throw new Error('DATABASE_URL 환경변수가 필요합니다.');
+        // Railway 자동 환경변수 탐지 및 대체 연결 방법
+        let databaseUrl = process.env.DATABASE_URL;
+        
+        if (!databaseUrl) {
+            console.log('🔍 DATABASE_URL 없음, Railway 자동 환경변수 탐지 시도...');
+            
+            // Railway PostgreSQL 자동 환경변수 탐지
+            const railwayVars = [
+                'POSTGRES_URL',
+                'POSTGRESQL_URL', 
+                'DATABASE_PRIVATE_URL',
+                'DATABASE_PUBLIC_URL',
+                'PGDATABASE_URL'
+            ];
+            
+            for (const varName of railwayVars) {
+                if (process.env[varName]) {
+                    databaseUrl = process.env[varName];
+                    console.log(`✅ Railway 환경변수 발견: ${varName}`);
+                    break;
+                }
+            }
         }
         
-        // DATABASE_URL의 일부만 로깅 (보안상 전체 URL은 노출하지 않음)
-        const dbUrl = process.env.DATABASE_URL;
+        if (!databaseUrl) {
+            console.error('❌ 데이터베이스 연결 URL을 찾을 수 없습니다!');
+            console.log('📝 사용 가능한 환경변수:');
+            Object.keys(process.env)
+                .filter(key => key.toLowerCase().includes('database') || key.toLowerCase().includes('postgres'))
+                .forEach(key => console.log(`  - ${key}: ${process.env[key] ? '[설정됨]' : '[비어있음]'}`));
+            throw new Error('데이터베이스 연결 URL이 필요합니다.');
+        }
+        
+        // 데이터베이스 URL의 일부만 로깅 (보안상 전체 URL은 노출하지 않음)
+        const dbUrl = databaseUrl;
         const urlParts = dbUrl.match(/^(postgres:\/\/[^:]+):[^@]+@([^:]+):(\d+)\/(.+)$/);
         if (urlParts) {
             console.log('📊 DB 연결 정보:', {
@@ -29,7 +57,7 @@ function getPool() {
         
         try {
             pool = new Pool({
-                connectionString: process.env.DATABASE_URL,
+                connectionString: databaseUrl,
                 ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
                 // 연결 타임아웃 및 재시도 설정
                 connectionTimeoutMillis: 10000,
