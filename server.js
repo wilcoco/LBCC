@@ -16,7 +16,14 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname)));
 
 // 데이터베이스 초기화
-initializeDatabase();
+console.log('🚀 서버 시작 - 데이터베이스 초기화 시작...');
+initializeDatabase()
+    .then(() => {
+        console.log('✅ 데이터베이스 초기화 완료!');
+    })
+    .catch((error) => {
+        console.error('❌ 데이터베이스 초기화 실패:', error);
+    });
 
 // 이제 모든 데이터는 PostgreSQL 데이터베이스에 저장됩니다.
 // 메모리 기반 저장소는 더 이상 사용하지 않습니다.
@@ -59,10 +66,16 @@ app.post('/api/register', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ 사용자 등록 오류:', error);
+        console.error('❌ 사용자 등록 상세 오류:', {
+            message: error.message,
+            stack: error.stack,
+            code: error.code,
+            detail: error.detail
+        });
         res.status(500).json({ 
             error: '사용자 등록 중 오류가 발생했습니다.',
-            details: error.message
+            details: error.message,
+            code: error.code
         });
     }
 });
@@ -644,7 +657,27 @@ app.post('/api/debug/update-coefficient/:username', async (req, res) => {
     }
 });
 
-// 관리자 엔드포인트: 데이터베이스 완전 초기화
+// 디버그 API - 수동 데이터베이스 초기화 및 스키마 마이그레이션
+app.post('/api/debug/init-database', async (req, res) => {
+    try {
+        console.log('🔧 수동 데이터베이스 초기화 시작...');
+        await initializeDatabase();
+        console.log('✅ 수동 데이터베이스 초기화 완료!');
+        
+        res.json({ 
+            success: true, 
+            message: '데이터베이스 초기화 및 스키마 마이그레이션 완료'
+        });
+    } catch (error) {
+        console.error('❌ 수동 데이터베이스 초기화 실패:', error);
+        res.status(500).json({ 
+            error: '데이터베이스 초기화 실패',
+            details: error.message
+        });
+    }
+});
+
+// 관리자 API - 데이터베이스 초기화 (모든 데이터 삭제)
 app.post('/api/admin/reset-database', async (req, res) => {
     try {
         console.log('데이터베이스 완전 초기화 시작...');
