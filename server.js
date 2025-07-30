@@ -428,36 +428,87 @@ app.get('/api/debug/coefficients', async (req, res) => {
     }
 });
 
-// 🚀 디버깅: 수동 계수 업데이트 트리거
+// 디버그 엔드포인트: 사용자 계수 수동 업데이트
 app.post('/api/debug/update-coefficient/:username', async (req, res) => {
     try {
         const { username } = req.params;
-        const { UserModel } = require('./db/postgresql');
         
-        console.log(`🔧 ${username} 계수 수동 업데이트 시작...`);
+        console.log(`${username} 계수 수동 업데이트 요청`);
         
-        // 성과 계산
+        // 성과 계산 및 계수 업데이트
         const performance = await UserModel.calculateUserPerformance(username);
-        console.log(`📊 ${username} 성과 점수: ${performance}`);
+        await UserModel.updateCoefficient(
+            username, 
+            performance, 
+            'Manual debug update', 
+            performance
+        );
         
-        // 계수 업데이트
-        const newCoefficient = await UserModel.updateCoefficient(username, performance, 'manual_debug');
-        console.log(`✅ ${username} 계수 업데이트 완료: ${newCoefficient}`);
-        
-        // 캐시 무효화
-        coefficientCalculator.invalidateCache();
+        console.log(`${username} 계수 업데이트 완료: ${performance.toFixed(4)}`);
         
         res.json({
             success: true,
             username,
-            oldPerformance: 1.0,
-            newPerformance: performance,
-            newCoefficient,
-            message: `${username} 계수가 ${newCoefficient.toFixed(4)}로 업데이트되었습니다.`
+            newCoefficient: performance,
+            message: '계수 업데이트 완료'
         });
+        
     } catch (error) {
-        console.error('수동 계수 업데이트 오류:', error);
-        res.status(500).json({ error: '계수 업데이트 중 오류가 발생했습니다.' });
+        console.error('계수 수동 업데이트 오류:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// 관리자 엔드포인트: 데이터베이스 완전 초기화
+app.post('/api/admin/reset-database', async (req, res) => {
+    try {
+        console.log('데이터베이스 완전 초기화 시작...');
+        
+        const { getPool } = require('./db/postgresql');
+        const client = getPool();
+        
+        // 모든 테이블의 데이터 삭제 (순서 중요 - 외래키 제약 고려)
+        await client.query('DELETE FROM coefficient_history');
+        console.log('coefficient_history 테이블 초기화 완료');
+        
+        await client.query('DELETE FROM investments');
+        console.log('investments 테이블 초기화 완료');
+        
+        await client.query('DELETE FROM content');
+        console.log('content 테이블 초기화 완료');
+        
+        await client.query('DELETE FROM users');
+        console.log('users 테이블 초기화 완료');
+        
+        // 시퀀스 초기화 (ID 카운터 리셋)
+        try {
+            await client.query('ALTER SEQUENCE users_id_seq RESTART WITH 1');
+            await client.query('ALTER SEQUENCE content_id_seq RESTART WITH 1');
+            await client.query('ALTER SEQUENCE investments_id_seq RESTART WITH 1');
+            await client.query('ALTER SEQUENCE coefficient_history_id_seq RESTART WITH 1');
+            console.log('모든 시퀀스 초기화 완료');
+        } catch (seqError) {
+            console.warn('시퀀스 초기화 경고:', seqError.message);
+        }
+        
+        console.log('데이터베이스 초기화 완료! 모든 사용자 및 데이터가 삭제되었습니다.');
+        
+        res.json({
+            success: true,
+            message: '데이터베이스가 완전히 초기화되었습니다.',
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('데이터베이스 초기화 실패:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            message: '데이터베이스 초기화 실패'
+        });
     }
 });
 

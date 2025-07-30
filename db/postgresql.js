@@ -383,6 +383,7 @@ class ContentModel {
 
 module.exports = {
     initializeDatabase,
+    getPool,
     UserModel,
     ContentModel
 };
