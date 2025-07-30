@@ -594,7 +594,7 @@ class LaborValueCoinSystem {
         // 블록 생성 이벤트 리스너
         window.addEventListener('blockCreated', (event) => {
             const { block, username } = event.detail;
-            console.log(`🧱 새 블록 생성됨:`, block);
+            console.log(`🧩 새 블록 생성됨:`, block);
             
             // 블록 생성 애니메이션 표시
             this.showBlockCreationAnimation(block);
@@ -604,16 +604,51 @@ class LaborValueCoinSystem {
         });
     }
     
-    // 로컬 체인 초기화
-    initializeLocalChain() {
+    // 로컬 체인 초기화 (서버 데이터 동기화 포함)
+    async initializeLocalChain() {
         if (this.currentUser && typeof LocalChain !== 'undefined') {
             this.localChain = new LocalChain(this.currentUser);
+            console.log(`🔗 로컬 체인 초기화 시작: ${this.currentUser}`);
+            
+            // 서버에서 기존 투자 데이터 가져와서 로컬 체인에 동기화
+            try {
+                const serverData = await APIClient.getUserInvestments(this.currentUser);
+                await this.syncLocalChainWithServer(serverData);
+                console.log(`🔄 서버 데이터 동기화 완료`);
+            } catch (error) {
+                console.warn('서버 데이터 동기화 실패:', error.message);
+            }
+            
             console.log(`🔗 로컬 체인 초기화 완료: ${this.currentUser}`);
             console.log('체인 정보:', this.localChain.getChainInfo());
             this.displayLocalChainStatus();
         } else {
             console.warn('로컬 체인을 초기화할 수 없습니다. LocalChain 클래스가 로드되지 않았습니다.');
         }
+    }
+    
+    // 서버 데이터와 로컬 체인 동기화
+    async syncLocalChainWithServer(serverData) {
+        if (!this.localChain || !serverData.investments) {
+            return;
+        }
+        
+        console.log('🔄 서버 데이터와 로컬 체인 동기화 시작...');
+        
+        // 서버에서 가져온 투자 데이터를 로컬 체인에 추가
+        for (const investment of serverData.investments) {
+            const blockData = {
+                contentId: investment.contentId,
+                amount: investment.amount,
+                timestamp: investment.timestamp,
+                serverSync: true // 서버에서 동기화된 데이터임을 표시
+            };
+            
+            // 로컬 체인에 블록 추가 (이벤트 발생 없이)
+            this.localChain.addBlockSilent('invest', blockData);
+        }
+        
+        console.log(`🔄 ${serverData.investments.length}개 투자 블록 동기화 완료`);
     }
     
     // 로컬 체인 상태 표시

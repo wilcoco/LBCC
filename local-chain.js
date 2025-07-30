@@ -84,6 +84,40 @@ class LocalChain {
     }
 
     /**
+     * 블록 추가 (이벤트 발생 없이 - 서버 동기화용)
+     */
+    addBlockSilent(action, data) {
+        const newBlock = {
+            id: this.chain.blocks.length,
+            timestamp: data.timestamp || new Date().toISOString(),
+            action: action,
+            data: data,
+            previousHash: this.getLastBlock().hash,
+            hash: '',
+            signature: ''
+        };
+
+        // 해시 계산
+        newBlock.hash = this.calculateHash(newBlock);
+        
+        // 디지털 서명 생성
+        newBlock.signature = this.generateSignature(newBlock);
+
+        // 체인에 추가
+        this.chain.blocks.push(newBlock);
+        
+        // 머클 루트 업데이트
+        this.updateMerkleRoot();
+        
+        // 로컬 스토리지에 저장
+        this.saveChain();
+
+        // 이벤트 발생 없이 조용히 추가
+        console.log(`🔇 서버 동기화 블록 추가: ${action}`, newBlock);
+        return newBlock;
+    }
+
+    /**
      * 해시 계산 (간단한 SHA-256 시뮬레이션)
      */
     calculateHash(block) {

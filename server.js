@@ -1,7 +1,8 @@
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const path = require('path');
+const { initializeDatabase, UserModel, ContentModel } = require('./db/postgresql');
+const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
@@ -12,6 +13,9 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname)));
+
+// 데이터베이스 초기화
+initializeDatabase();
 
 // 메모리 기반 데이터 저장소 (실제 운영에서는 데이터베이스 사용)
 let users = {};
