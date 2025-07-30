@@ -88,12 +88,22 @@ async function initializeDatabase() {
 class UserModel {
     static async create(userData) {
         const client = getPool();
-        const { username } = userData;
+        const { username, password, balance } = userData;
+        
+        console.log(`🔧 UserModel.create 호출:`, { username, password: password ? '[설정됨]' : '[없음]', balance });
+        
+        // 기본값 설정
+        const finalPassword = password || 'default123';
+        const finalBalance = balance !== undefined ? balance : 10000;
+        
+        console.log(`💾 데이터베이스에 사용자 생성: ${username} (잔액: ${finalBalance})`);
         
         const result = await client.query(
-            'INSERT INTO users (username) VALUES ($1) RETURNING *',
-            [username]
+            'INSERT INTO users (username, password, balance) VALUES ($1, $2, $3) RETURNING *',
+            [username, finalPassword, finalBalance]
         );
+        
+        console.log(`✅ 사용자 생성 완료:`, result.rows[0]);
         return result.rows[0];
     }
 
