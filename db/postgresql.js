@@ -23,6 +23,7 @@ async function initializeDatabase() {
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(255) UNIQUE NOT NULL,
+                password VARCHAR(255) DEFAULT 'default123',
                 balance INTEGER DEFAULT 10000,
                 coefficient DECIMAL(10,4) DEFAULT 1.0000,
                 coefficient_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -32,6 +33,17 @@ async function initializeDatabase() {
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
+        
+        // 기존 테이블에 password 컨럼 추가 (없는 경우에만)
+        try {
+            await client.query(`
+                ALTER TABLE users 
+                ADD COLUMN IF NOT EXISTS password VARCHAR(255) DEFAULT 'default123'
+            `);
+            console.log('✅ users 테이블에 password 컨럼 추가 완료');
+        } catch (alterError) {
+            console.log('📝 password 컨럼 이미 존재하거나 추가 실패:', alterError.message);
+        }
 
         // 컨텐츠 테이블 생성
         await client.query(`
