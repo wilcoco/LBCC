@@ -101,32 +101,52 @@ app.get('/api/contents', (req, res) => {
     res.json(contentsWithInvestments);
 });
 
-// 컨텐츠 생성
-app.post('/api/contents', (req, res) => {
-    const { title, richContent, url, tags, files, author } = req.body;
-    
-    if (!title || !author || !users[author]) {
-        return res.status(400).json({ error: '필수 정보가 누락되었습니다.' });
+// 컨텐츠 생성 (데이터베이스 기반)
+app.post('/api/contents', async (req, res) => {
+    try {
+        const { title, richContent, url, tags, files, author } = req.body;
+        
+        // 필수 정보 검증
+        if (!title || !author) {
+            return res.status(400).json({ error: '제목과 작성자는 필수 입니다.' });
+        }
+        
+        // 사용자 존재 확인 (데이터베이스에서)
+        const user = await UserModel.findByUsername(author);
+        if (!user) {
+            return res.status(400).json({ error: '존재하지 않는 사용자입니다.' });
+        }
+        
+        // 컨텐츠 데이터 준비
+        const contentData = {
+            title: title.trim(),
+            content: richContent || '',
+            url: url || '',
+            tags: tags || [],
+            files: files || [],
+            author
+        };
+        
+        console.log(`📝 ${author}가 새 컨텐츠 생성: "${title}"`);
+        
+        // 데이터베이스에 컨텐츠 저장
+        const content = await ContentModel.create(contentData);
+        
+        console.log(`✅ 컨텐츠 생성 완료: ID ${content.id}`);
+        
+        res.json({ 
+            success: true, 
+            content,
+            message: '컨텐츠가 성공적으로 생성되었습니다!'
+        });
+        
+    } catch (error) {
+        console.error('❌ 컨텐츠 생성 오류:', error);
+        res.status(500).json({ 
+            error: '컨텐츠 생성 중 오류가 발생했습니다.',
+            details: error.message
+        });
     }
-    
-    const content = {
-        id: nextContentId++,
-        title: title.trim(),
-        richContent: richContent || '',
-        url: url || '',
-        tags: tags || [],
-        files: files || [],
-        author,
-        createdAt: new Date().toISOString()
-    };
-    
-    contents.push(content);
-    
-    res.json({ 
-        success: true, 
-        content,
-        message: '컨텐츠가 성공적으로 생성되었습니다!'
-    });
 });
 
 // 투자하기 (계수 시스템 통합)
