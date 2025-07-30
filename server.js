@@ -239,16 +239,37 @@ app.get('/api/users/:username', (req, res) => {
 app.get('/api/users/:username/performance', async (req, res) => {
     try {
         const { username } = req.params;
+        console.log(`🔍 성과 정보 요청: ${username}`);
         
-        const performanceSummary = await coefficientCalculator.getUserPerformanceSummary(username);
-        if (!performanceSummary) {
+        // 사용자 존재 확인
+        const { UserModel } = require('./db/postgresql');
+        const user = await UserModel.findByUsername(username);
+        if (!user) {
+            console.log(`⚠️ 사용자 없음: ${username}`);
             return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
         }
         
+        console.log(`📊 ${username} 성과 요약 계산 시작...`);
+        const performanceSummary = await coefficientCalculator.getUserPerformanceSummary(username);
+        
+        if (!performanceSummary) {
+            console.log(`⚠️ ${username} 성과 요약 없음`);
+            return res.status(404).json({ error: '성과 정보를 찾을 수 없습니다.' });
+        }
+        
+        console.log(`✅ ${username} 성과 요약 완료:`, {
+            coefficient: performanceSummary.currentCoefficient,
+            totalInvested: performanceSummary.totalInvested,
+            totalDividends: performanceSummary.totalDividends
+        });
+        
         res.json(performanceSummary);
     } catch (error) {
-        console.error('성과 정보 조회 오류:', error);
-        res.status(500).json({ error: '성과 정보 조회 중 오류가 발생했습니다.' });
+        console.error(`❌ ${req.params.username} 성과 정보 조회 오류:`, error);
+        res.status(500).json({ 
+            error: '성과 정보 조회 중 오류가 발생했습니다.',
+            details: error.message 
+        });
     }
 });
 
