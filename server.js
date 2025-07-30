@@ -18,87 +18,155 @@ app.use(express.static(path.join(__dirname)));
 // 데이터베이스 초기화
 initializeDatabase();
 
-// 메모리 기반 데이터 저장소 (실제 운영에서는 데이터베이스 사용)
-let users = {};
-let contents = [];
-let investments = [];
-let dividends = []; // 배당 내역 추적
-let nextContentId = 1;
+// 이제 모든 데이터는 PostgreSQL 데이터베이스에 저장됩니다.
+// 메모리 기반 저장소는 더 이상 사용하지 않습니다.
 
 // API 라우트
 
-// 사용자 등록
-app.post('/api/register', (req, res) => {
-    const { username } = req.body;
-    
-    if (!username || username.trim() === '') {
-        return res.status(400).json({ error: '사용자명을 입력해주세요.' });
-    }
-    
-    if (users[username]) {
-        return res.status(400).json({ error: '이미 존재하는 사용자명입니다.' });
-    }
-    
-    users[username] = {
-        username,
-        balance: 10000,
-        createdAt: new Date().toISOString()
-    };
-    
-    res.json({ 
-        success: true, 
-        user: users[username],
-        message: `${username}님, 환영합니다! 10,000 코인이 지급되었습니다.`
-    });
-});
-
-// 사용자 로그인
-app.post('/api/login', (req, res) => {
-    const { username } = req.body;
-    
-    if (!username || !users[username]) {
-        return res.status(400).json({ error: '존재하지 않는 사용자입니다.' });
-    }
-    
-    res.json({ 
-        success: true, 
-        user: users[username],
-        message: `${username}님, 환영합니다!`
-    });
-});
-
-// 모든 컨텐츠 조회
-app.get('/api/contents', (req, res) => {
-    // 최신순으로 정렬
-    const sortedContents = [...contents].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    
-    // 각 컨텐츠에 투자 정보 추가
-    const contentsWithInvestments = sortedContents.map(content => {
-        const contentInvestments = investments.filter(inv => inv.contentId === content.id);
-        const totalInvestment = contentInvestments.reduce((sum, inv) => sum + inv.amount, 0);
-        const investorCount = new Set(contentInvestments.map(inv => inv.username)).size;
+// 사용자 등록 (데이터베이스 기반)
+app.post('/api/register', async (req, res) => {
+    try {
+        const { username, password } = req.body;
         
-        // 투자자별 총 투자액 계산
-        const investorSummary = {};
-        contentInvestments.forEach(inv => {
-            investorSummary[inv.username] = (investorSummary[inv.username] || 0) + inv.amount;
+        if (!username || username.trim() === '') {
+            return res.status(400).json({ error: '사용자명을 입력해주세요.' });
+        }
+        
+        console.log(`🔐 새 사용자 등록 시도: ${username}`);
+        
+        // 사용자 중복 확인
+        const existingUser = await UserModel.findByUsername(username);
+        if (existingUser) {
+            return res.status(400).json({ error: '이미 존재하는 사용자명입니다.' });
+        }
+        
+        // 데이터베이스에 사용자 생성
+        const user = await UserModel.create({
+            username: username.trim(),
+            password: password || 'default123', // 기본 비밀번호
+            balance: 10000
         });
         
-        // 상위 투자자 3명
-        const topInvestors = Object.entries(investorSummary)
-            .sort(([,a], [,b]) => b - a)
-            .slice(0, 3)
-            .map(([username, amount]) => ({ username, amount }));
+        console.log(`✅ 사용자 등록 성공: ${username} (ID: ${user.id})`);
         
-        return {
-            ...content,
-            totalInvestment,
-            investorCount,
-            topInvestors
-        };
-    });
-    
-    res.json(contentsWithInvestments);
+        // 비밀번호 제외하고 반환
+        const { password: _, ...userInfo } = user;
+        
+        res.json({ 
+            success: true, 
+            user: userInfo,
+            message: `${username}님, 환영합니다! 10,000 코인이 지급되었습니다.`
+        });
+        
+    } catch (error) {
+        console.error('❌ 사용자 등록 오류:', error);
+        res.status(500).json({ 
+            error: '사용자 등록 중 오류가 발생했습니다.',
+            details: error.message
+        });
+    }
+});
+
+// 사용자 로그인 (데이터베이스 기반)
+app.post('/api/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        
+        if (!username || username.trim() === '') {
+            return res.status(400).json({ error: '사용자명을 입력해주세요.' });
+        }
+        
+        console.log(`🔑 로그인 시도: ${username}`);
+        
+        // 데이터베이스에서 사용자 조회
+        const user = await UserModel.findByUsername(username);
+        if (!user) {
+            return res.status(400).json({ error: '존재하지 않는 사용자입니다.' });
+        }
+        
+        console.log(`✅ 로그인 성공: ${username}`);
+        
+        // 비밀번호 제외하고 반환
+        const { password: _, ...userInfo } = user;
+        
+        res.json({ 
+            success: true, 
+            user: userInfo,
+            message: `${username}님, 환영합니다!`
+        });
+        
+    } catch (error) {
+        console.error('❌ 로그인 오류:', error);
+        res.status(500).json({ 
+            error: '로그인 중 오류가 발생했습니다.',
+            details: error.message
+        });
+    }
+});
+
+// 모든 컨텐츠 조회 (데이터베이스 기반)
+app.get('/api/contents', async (req, res) => {
+    try {
+        console.log('📜 컨텐츠 목록 요청');
+        
+        // 데이터베이스에서 모든 컨텐츠 조회 (최신순)
+        const contents = await ContentModel.findAll();
+        
+        console.log(`✅ 컨텐츠 ${contents.length}건 조회 완료`);
+        
+        // 각 컨텐츠에 투자 정보 추가
+        const contentsWithInvestments = await Promise.all(contents.map(async (content) => {
+            try {
+                // 해당 컨텐츠의 모든 투자 조회
+                const { getPool } = require('./db/postgresql');
+                const client = getPool();
+                const investmentsResult = await client.query(
+                    'SELECT username, amount FROM investments WHERE content_id = $1',
+                    [content.id]
+                );
+                
+                const contentInvestments = investmentsResult.rows;
+                const totalInvestment = contentInvestments.reduce((sum, inv) => sum + inv.amount, 0);
+                const investorCount = new Set(contentInvestments.map(inv => inv.username)).size;
+                
+                // 투자자별 총 투자액 계산
+                const investorSummary = {};
+                contentInvestments.forEach(inv => {
+                    investorSummary[inv.username] = (investorSummary[inv.username] || 0) + inv.amount;
+                });
+                
+                // 상위 투자자 3명
+                const topInvestors = Object.entries(investorSummary)
+                    .sort(([,a], [,b]) => b - a)
+                    .slice(0, 3)
+                    .map(([username, amount]) => ({ username, amount }));
+                
+                return {
+                    ...content,
+                    totalInvestment,
+                    investorCount,
+                    topInvestors
+                };
+            } catch (error) {
+                console.warn(`⚠️ 컨텐츠 ${content.id} 투자 정보 조회 실패:`, error.message);
+                return {
+                    ...content,
+                    totalInvestment: 0,
+                    investorCount: 0,
+                    topInvestors: []
+                };
+            }
+        }));
+        
+        res.json(contentsWithInvestments);
+        
+    } catch (error) {
+        console.error('❌ 컨텐츠 조회 오류:', error);
+        res.status(500).json({ 
+            error: '컨텐츠 조회 중 오류가 발생했습니다.',
+            details: error.message
+        });
+    }
 });
 
 // 컨텐츠 생성 (데이터베이스 기반)
@@ -240,15 +308,33 @@ app.post('/api/invest', async (req, res) => {
     }
 });
 
-// 사용자 정보 조회
-app.get('/api/users/:username', (req, res) => {
-    const { username } = req.params;
-    
-    if (!users[username]) {
-        return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+// 사용자 정보 조회 (데이터베이스 기반)
+app.get('/api/users/:username', async (req, res) => {
+    try {
+        const { username } = req.params;
+        
+        console.log(`🔍 사용자 정보 요청: ${username}`);
+        
+        // 데이터베이스에서 사용자 조회
+        const user = await UserModel.findByUsername(username);
+        if (!user) {
+            console.log(`⚠️ 사용자 없음: ${username}`);
+            return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+        }
+        
+        console.log(`✅ 사용자 정보 조회 성공: ${username}`);
+        
+        // 사용자 정보 반환 (비밀번호 제외)
+        const { password, ...userInfo } = user;
+        res.json(userInfo);
+        
+    } catch (error) {
+        console.error(`❌ 사용자 정보 조회 오류 (${req.params.username}):`, error);
+        res.status(500).json({ 
+            error: '사용자 정보 조회 중 오류가 발생했습니다.',
+            details: error.message
+        });
     }
-    
-    res.json(users[username]);
 });
 
 // 🎯 사용자 계수 및 성과 정보 조회
