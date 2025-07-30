@@ -325,14 +325,26 @@ class LaborValueCoinSystem {
     
     // 🎯 계수 정보 표시 메서드
     async updateCoefficientDisplay() {
+        if (!this.currentUser) {
+            console.log('⚠️ 계수 업데이트 스킵: 사용자 로그인 안됨');
+            return;
+        }
+        
         try {
+            console.log(`🔍 ${this.currentUser} 계수 정보 로드 시도...`);
             const performance = await APIClient.getUserPerformance(this.currentUser);
+            
+            if (!performance) {
+                throw new Error('성과 데이터가 비어있습니다.');
+            }
+            
+            console.log(`✅ ${this.currentUser} 성과 데이터 로드 성공:`, performance);
             
             // 계수 정보 표시 업데이트
             const coefficientElement = document.getElementById('user-coefficient');
             if (coefficientElement) {
-                const coefficient = performance.currentCoefficient;
-                const trend = this.getCoefficientTrend(performance.coefficientHistory);
+                const coefficient = performance.currentCoefficient || 1.0;
+                const trend = this.getCoefficientTrend(performance.coefficientHistory || []);
                 
                 coefficientElement.innerHTML = `
                     <div class="coefficient-display">
@@ -350,21 +362,34 @@ class LaborValueCoinSystem {
             this.updatePerformanceSummary(performance);
             
         } catch (error) {
-            console.error('계수 정보 로드 실패:', error);
-            // 기본 계수 표시
+            console.error(`❌ ${this.currentUser} 계수 정보 로드 실패:`, error);
+            
+            // API 오류 상세 로깅
+            if (error.message && error.message.includes('<!DOCTYPE')) {
+                console.error('🚨 API 엔드포인트가 HTML 페이지를 반환하고 있습니다. 서버 라우트 문제일 가능성이 높습니다.');
+            }
+            
+            // 기본 계수 표시 (오류 상황에서도 UI 유지)
             const coefficientElement = document.getElementById('user-coefficient');
             if (coefficientElement) {
                 coefficientElement.innerHTML = `
                     <div class="coefficient-display">
                         <span class="coefficient-label">투자 신용도:</span>
                         <span class="coefficient-value">×1.0000</span>
-                        <span class="coefficient-trend">🟡 신규</span>
+                        <span class="coefficient-trend">⚠️ 로드 실패</span>
                     </div>
                     <div class="coefficient-explanation">
-                        투자 1코인 = 실제 지분 1.00코인 상당
+                        서버 연결 오류 - 기본값 표시 중
                     </div>
                 `;
             }
+            
+            // 기본 성과 요약 표시
+            this.updatePerformanceSummary({
+                totalInvested: 0,
+                totalDividends: 0,
+                totalEffectiveValue: 0
+            });
         }
     }
     
