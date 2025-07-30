@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { initializeDatabase, UserModel, ContentModel } = require('./db/postgresql');
+const { coefficientCalculator } = require('./coefficient-calculator');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 
@@ -128,78 +129,75 @@ app.post('/api/contents', (req, res) => {
     });
 });
 
-// 투자하기
-app.post('/api/invest', (req, res) => {
-    const { contentId, amount, username } = req.body;
-    
-    if (!contentId || !amount || !username || amount <= 0) {
-        return res.status(400).json({ error: '잘못된 투자 정보입니다.' });
-    }
-    
-    if (!users[username]) {
-        return res.status(400).json({ error: '존재하지 않는 사용자입니다.' });
-    }
-    
-    if (users[username].balance < amount) {
-        return res.status(400).json({ error: '잔액이 부족합니다.' });
-    }
-    
-    const content = contents.find(c => c.id === parseInt(contentId));
-    if (!content) {
-        return res.status(400).json({ error: '존재하지 않는 컨텐츠입니다.' });
-    }
-    
-    // 기존 투자자들에게 배당 분배
-    const existingInvestments = investments.filter(inv => inv.contentId === parseInt(contentId));
-    const totalExistingInvestment = existingInvestments.reduce((sum, inv) => sum + inv.amount, 0);
-    
-    if (totalExistingInvestment > 0) {
-        // 투자자별 총 투자액 계산
-        const investorTotals = {};
-        existingInvestments.forEach(inv => {
-            investorTotals[inv.username] = (investorTotals[inv.username] || 0) + inv.amount;
+// 투자하기 (계수 시스템 통합)
+app.post('/api/invest', async (req, res) => {
+    try {
+        const { contentId, amount, username } = req.body;
+        
+        if (!contentId || !amount || !username || amount <= 0) {
+            return res.status(400).json({ error: '잘못된 투자 정보입니다.' });
+        }
+        
+        // 사용자 확인
+        const user = await UserModel.findByUsername(username);
+        if (!user) {
+            return res.status(400).json({ error: '존재하지 않는 사용자입니다.' });
+        }
+        
+        if (user.balance < amount) {
+            return res.status(400).json({ error: '잔액이 부족합니다.' });
+        }
+        
+        // 컨텐츠 확인
+        const content = await ContentModel.findById(contentId);
+        if (!content) {
+            return res.status(400).json({ error: '존재하지 않는 컨텐츠입니다.' });
+        }
+        
+        // 🚀 계수 기반 배당 분배 계산
+        const dividendDistribution = await coefficientCalculator.calculateDividendDistribution(contentId, amount);
+        
+        // 배당 지급
+        for (const dividend of dividendDistribution) {
+            await UserModel.updateBalance(
+                dividend.username, 
+                (await UserModel.findByUsername(dividend.username)).balance + dividend.amount
+            );
+            
+            console.log(`💰 배당 지급: ${dividend.username} +${dividend.amount} (계수: ${dividend.coefficient.toFixed(4)}, 지분: ${(dividend.share * 100).toFixed(2)}%)`);
+        }
+        
+        // 새 투자 기록
+        const investment = await ContentModel.addInvestment(contentId, {
+            username,
+            amount,
+            timestamp: new Date().toISOString()
         });
         
-        // 배당 분배 및 기록
-        Object.entries(investorTotals).forEach(([investor, investedAmount]) => {
-            const dividend = Math.floor((investedAmount / totalExistingInvestment) * amount);
-            if (dividend > 0) {
-                users[investor].balance += dividend;
-                
-                // 배당 내역 기록
-                dividends.push({
-                    id: uuidv4(),
-                    contentId: parseInt(contentId),
-                    recipientUsername: investor,
-                    fromUsername: username, // 투자한 사람
-                    amount: dividend,
-                    originalInvestment: investedAmount,
-                    totalInvestmentAtTime: totalExistingInvestment,
-                    newInvestmentAmount: amount,
-                    timestamp: new Date().toISOString()
-                });
-            }
+        // 투자자 잔액 차감
+        await UserModel.updateBalance(username, user.balance - amount);
+        
+        // 🎯 투자 후 효과적 지분 업데이트
+        const userCoefficient = await coefficientCalculator.getUserCoefficient(username);
+        await coefficientCalculator.updateInvestmentEffectiveAmount(investment.id, username, amount);
+        
+        // 업데이트된 사용자 정보
+        const updatedUser = await UserModel.findByUsername(username);
+        
+        res.json({ 
+            success: true, 
+            investment,
+            newBalance: updatedUser.balance,
+            userCoefficient: userCoefficient,
+            effectiveAmount: amount * userCoefficient,
+            dividendsDistributed: dividendDistribution,
+            message: `${amount} 코인 투자 완료! (효과적 지분: ${(amount * userCoefficient).toFixed(2)})`
         });
+        
+    } catch (error) {
+        console.error('투자 처리 오류:', error);
+        res.status(500).json({ error: '투자 처리 중 오류가 발생했습니다.' });
     }
-    
-    // 새 투자 기록
-    const investment = {
-        id: uuidv4(),
-        contentId: parseInt(contentId),
-        username,
-        amount,
-        timestamp: new Date().toISOString()
-    };
-    
-    investments.push(investment);
-    users[username].balance -= amount;
-    
-    res.json({ 
-        success: true, 
-        investment,
-        newBalance: users[username].balance,
-        message: `${amount} 코인을 투자했습니다!`
-    });
 });
 
 // 사용자 정보 조회
@@ -213,9 +211,62 @@ app.get('/api/users/:username', (req, res) => {
     res.json(users[username]);
 });
 
+// 🎯 사용자 계수 및 성과 정보 조회
+app.get('/api/users/:username/performance', async (req, res) => {
+    try {
+        const { username } = req.params;
+        
+        const performanceSummary = await coefficientCalculator.getUserPerformanceSummary(username);
+        if (!performanceSummary) {
+            return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+        }
+        
+        res.json(performanceSummary);
+    } catch (error) {
+        console.error('성과 정보 조회 오류:', error);
+        res.status(500).json({ error: '성과 정보 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 🔄 계수 배치 업데이트 (관리자용)
+app.post('/api/admin/update-coefficients', async (req, res) => {
+    try {
+        await UserModel.batchUpdateCoefficients();
+        coefficientCalculator.invalidateCache(); // 캐시 무효화
+        
+        res.json({ 
+            success: true, 
+            message: '모든 사용자 계수가 업데이트되었습니다.' 
+        });
+    } catch (error) {
+        console.error('계수 배치 업데이트 오류:', error);
+        res.status(500).json({ error: '계수 업데이트 중 오류가 발생했습니다.' });
+    }
+});
+
+// 📊 컨텐츠별 효과적 지분 조회
+app.get('/api/contents/:contentId/shares', async (req, res) => {
+    try {
+        const { contentId } = req.params;
+        
+        const effectiveShares = await coefficientCalculator.getEffectiveShares(contentId);
+        
+        res.json({
+            contentId: parseInt(contentId),
+            shares: effectiveShares,
+            totalShares: effectiveShares.length,
+            lastUpdated: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('지분 조회 오류:', error);
+        res.status(500).json({ error: '지분 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 // 사용자 투자 현황 조회
-app.get('/api/users/:username/investments', (req, res) => {
-    const { username } = req.params;
+app.get('/api/users/:username/investments', async (req, res) => {
+    try {
+        const { username } = req.params;
     
     console.log(`투자 현황 요청: ${username}`);
     console.log(`전체 사용자:`, Object.keys(users));
@@ -296,13 +347,17 @@ app.get('/api/users/:username/investments', (req, res) => {
     const totalInvested = investmentSummary.reduce((sum, inv) => sum + inv.totalInvested, 0);
     const totalDividends = investmentSummary.reduce((sum, inv) => sum + inv.totalDividends, 0);
     
-    res.json({
-        username,
-        totalInvested,
-        totalDividends,
-        investmentCount: investmentSummary.length,
-        investments: investmentSummary.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    });
+        res.json({
+            username,
+            totalInvested,
+            totalDividends,
+            investmentCount: investmentSummary.length,
+            investments: investmentSummary.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        });
+    } catch (error) {
+        console.error('투자 현황 조회 오류:', error);
+        res.status(500).json({ error: '투자 현황 조회 중 오류가 발생했습니다.' });
+    }
 });
 
 // 정적 파일 서빙 (index.html 등)

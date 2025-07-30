@@ -24,6 +24,8 @@ async function initializeDatabase() {
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(255) UNIQUE NOT NULL,
                 balance INTEGER DEFAULT 10000,
+                coefficient DECIMAL(10,4) DEFAULT 1.0000,
+                coefficient_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 total_invested INTEGER DEFAULT 0,
                 total_dividends INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -56,8 +58,23 @@ async function initializeDatabase() {
                 username VARCHAR(255) NOT NULL,
                 content_id INTEGER NOT NULL,
                 amount INTEGER NOT NULL,
+                effective_amount DECIMAL(15,4),
+                coefficient_at_time DECIMAL(10,4) DEFAULT 1.0000,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (content_id) REFERENCES contents(id)
+            )
+        `);
+
+        // 계수 변동 히스토리 테이블 생성
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS coefficient_history (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(255) NOT NULL,
+                old_coefficient DECIMAL(10,4),
+                new_coefficient DECIMAL(10,4),
+                reason TEXT,
+                performance_score DECIMAL(10,4),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
 
@@ -157,6 +174,103 @@ class UserModel {
                 contentAuthor: row.content_author || 'Unknown'
             }))
         };
+    }
+
+    // 계수 관리 메서드들
+    static async updateCoefficient(username, newCoefficient, reason, performanceScore) {
+        const client = getPool();
+        
+        // 현재 계수 가져오기
+        const currentUser = await this.findByUsername(username);
+        const oldCoefficient = currentUser ? currentUser.coefficient : 1.0;
+        
+        // 계수 범위 제한 (0.01 ~ 100)
+        const boundedCoefficient = Math.max(0.01, Math.min(100, newCoefficient));
+        
+        // 계수 업데이트
+        await client.query(
+            'UPDATE users SET coefficient = $1, coefficient_updated_at = CURRENT_TIMESTAMP WHERE username = $2',
+            [boundedCoefficient, username]
+        );
+        
+        // 히스토리 기록
+        await client.query(
+            'INSERT INTO coefficient_history (username, old_coefficient, new_coefficient, reason, performance_score) VALUES ($1, $2, $3, $4, $5)',
+            [username, oldCoefficient, boundedCoefficient, reason, performanceScore]
+        );
+        
+        return boundedCoefficient;
+    }
+    
+    static async calculateUserPerformance(username, daysPeriod = 30) {
+        const client = getPool();
+        
+        // 최근 N일간 투자 성과 계산
+        const result = await client.query(`
+            SELECT 
+                i.content_id,
+                i.amount,
+                i.created_at,
+                (
+                    SELECT COALESCE(SUM(i2.amount), 0)
+                    FROM investments i2 
+                    WHERE i2.content_id = i.content_id 
+                    AND i2.created_at > i.created_at
+                ) as subsequent_investments
+            FROM investments i
+            WHERE i.username = $1 
+            AND i.created_at > NOW() - INTERVAL '$2 days'
+            ORDER BY i.created_at DESC
+        `, [username, daysPeriod]);
+        
+        if (result.rows.length === 0) {
+            return 1.0; // 기본 계수
+        }
+        
+        // 투자 매력도 지수 계산
+        let totalScore = 0;
+        let totalWeight = 0;
+        
+        result.rows.forEach(investment => {
+            const attractionRate = investment.subsequent_investments / investment.amount;
+            const daysSince = (Date.now() - new Date(investment.created_at).getTime()) / (24 * 60 * 60 * 1000);
+            const timeWeight = Math.exp(-daysSince / 7); // 7일 반감기
+            
+            totalScore += attractionRate * timeWeight;
+            totalWeight += timeWeight;
+        });
+        
+        const averagePerformance = totalWeight > 0 ? totalScore / totalWeight : 0;
+        
+        // 성과를 계수로 변환 (0.5 ~ 2.0 범위)
+        return Math.max(0.5, Math.min(2.0, 0.5 + averagePerformance));
+    }
+    
+    static async batchUpdateCoefficients() {
+        const client = getPool();
+        
+        // 모든 사용자 가져오기
+        const usersResult = await client.query('SELECT username, coefficient FROM users');
+        
+        for (const user of usersResult.rows) {
+            try {
+                const performance = await this.calculateUserPerformance(user.username);
+                
+                // 지수적 이동평균으로 부드러운 변화
+                const newCoefficient = user.coefficient * 0.9 + performance * 0.1;
+                
+                await this.updateCoefficient(
+                    user.username, 
+                    newCoefficient, 
+                    'Batch performance update', 
+                    performance
+                );
+                
+                console.log(`✅ ${user.username}: ${user.coefficient.toFixed(4)} → ${newCoefficient.toFixed(4)}`);
+            } catch (error) {
+                console.error(`❌ ${user.username} 계수 업데이트 오류:`, error);
+            }
+        }
     }
 }
 

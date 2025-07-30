@@ -225,13 +225,15 @@ class LaborValueCoinSystem {
             }
             
             // 컨텐츠 목록 새로고침
+            this.contents = await APIClient.getContents();
             
-            this.updateUI();
+            // 🎯 UI 업데이트 (계수 정보 포함)
+            await this.updateUI();
             
             // 투자 현황도 새로고침
-        if (this.currentUser && this.currentUserData) {
-            this.updateInvestmentsList();
-        }
+            if (this.currentUser && this.currentUserData) {
+                this.updateInvestmentsList();
+            }
         
         // 로컬 체인에 투자 블록 추가
         if (this.localChain) {
@@ -277,15 +279,23 @@ class LaborValueCoinSystem {
         alert(`${amount} 코인을 투자했습니다.`);
     }
 
-    updateUI() {
+    async updateUI() {
         // 사용자 정보 업데이트
         if (this.currentUser && this.currentUserData) {
             document.getElementById('current-user').textContent = `사용자: ${this.currentUser}`;
             document.getElementById('user-balance').textContent = `잔액: ${this.currentUserData.balance.toLocaleString()}`;
+            
+            // 🎯 계수 정보 표시
+            await this.updateCoefficientDisplay();
+            
             document.getElementById('login-btn').style.display = 'none';
             document.getElementById('register-btn').style.display = 'none';
             document.getElementById('logout-btn').style.display = 'inline-block';
             document.querySelector('.my-investments').style.display = 'block';
+            
+            // 🎯 계수 및 성과 정보 표시 활성화
+            document.getElementById('user-coefficient').style.display = 'block';
+            document.getElementById('performance-summary').style.display = 'block';
             
             // 로컬 체인 초기화 확인 (로그인 상태에서만)
             if (!this.localChain) {
@@ -298,6 +308,10 @@ class LaborValueCoinSystem {
             document.getElementById('register-btn').style.display = 'inline-block';
             document.getElementById('logout-btn').style.display = 'none';
             document.querySelector('.my-investments').style.display = 'none';
+            
+            // 🎯 계수 및 성과 정보 숨기기
+            document.getElementById('user-coefficient').style.display = 'none';
+            document.getElementById('performance-summary').style.display = 'none';
         }
 
         // 컨텐츠 목록 업데이트
@@ -306,6 +320,93 @@ class LaborValueCoinSystem {
         // 투자 현황 업데이트
         if (this.currentUser && this.currentUserData) {
             this.updateInvestmentsList();
+        }
+    }
+    
+    // 🎯 계수 정보 표시 메서드
+    async updateCoefficientDisplay() {
+        try {
+            const performance = await APIClient.getUserPerformance(this.currentUser);
+            
+            // 계수 정보 표시 업데이트
+            const coefficientElement = document.getElementById('user-coefficient');
+            if (coefficientElement) {
+                const coefficient = performance.currentCoefficient;
+                const trend = this.getCoefficientTrend(performance.coefficientHistory);
+                
+                coefficientElement.innerHTML = `
+                    <div class="coefficient-display">
+                        <span class="coefficient-label">투자 신용도:</span>
+                        <span class="coefficient-value">×${coefficient.toFixed(4)}</span>
+                        <span class="coefficient-trend">${trend.icon} ${trend.change}</span>
+                    </div>
+                    <div class="coefficient-explanation">
+                        투자 1코인 = 실제 지분 ${coefficient.toFixed(2)}코인 상당
+                    </div>
+                `;
+            }
+            
+            // 성과 요약 정보 업데이트
+            this.updatePerformanceSummary(performance);
+            
+        } catch (error) {
+            console.error('계수 정보 로드 실패:', error);
+            // 기본 계수 표시
+            const coefficientElement = document.getElementById('user-coefficient');
+            if (coefficientElement) {
+                coefficientElement.innerHTML = `
+                    <div class="coefficient-display">
+                        <span class="coefficient-label">투자 신용도:</span>
+                        <span class="coefficient-value">×1.0000</span>
+                        <span class="coefficient-trend">🟡 신규</span>
+                    </div>
+                    <div class="coefficient-explanation">
+                        투자 1코인 = 실제 지분 1.00코인 상당
+                    </div>
+                `;
+            }
+        }
+    }
+    
+    // 계수 변동 추세 계산
+    getCoefficientTrend(history) {
+        if (!history || history.length < 2) {
+            return { icon: '🟡', change: '신규' };
+        }
+        
+        const latest = history[0];
+        const previous = history[1];
+        const change = latest.new_coefficient - previous.new_coefficient;
+        
+        if (change > 0.01) {
+            return { icon: '↗️', change: `+${change.toFixed(4)}` };
+        } else if (change < -0.01) {
+            return { icon: '↘️', change: change.toFixed(4) };
+        } else {
+            return { icon: '➡️', change: '안정' };
+        }
+    }
+    
+    // 성과 요약 정보 업데이트
+    updatePerformanceSummary(performance) {
+        const summaryElement = document.getElementById('performance-summary');
+        if (summaryElement) {
+            summaryElement.innerHTML = `
+                <div class="performance-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">총 투자:</span>
+                        <span class="stat-value">${performance.totalInvested.toLocaleString()}코인</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">총 배당:</span>
+                        <span class="stat-value">${performance.totalDividends.toLocaleString()}코인</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">효과적 가치:</span>
+                        <span class="stat-value">${performance.totalEffectiveValue.toLocaleString()}코인</span>
+                    </div>
+                </div>
+            `;
         }
     }
 

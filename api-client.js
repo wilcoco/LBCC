@@ -145,6 +145,62 @@ class APIClient {
             throw error;
         }
     }
+    
+    // 🎯 사용자 성과 및 계수 정보 조회
+    static async getUserPerformance(username) {
+        try {
+            const response = await fetch(`${API_BASE}/users/${username}/performance`);
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || '성과 정보 조회 실패');
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('Get user performance error:', error);
+            throw error;
+        }
+    }
+    
+    // 📊 컨텐츠별 효과적 지분 조회
+    static async getContentShares(contentId) {
+        try {
+            const response = await fetch(`${API_BASE}/contents/${contentId}/shares`);
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || '지분 정보 조회 실패');
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('Get content shares error:', error);
+            throw error;
+        }
+    }
+    
+    // 🔄 계수 배치 업데이트 (관리자용)
+    static async updateCoefficients() {
+        try {
+            const response = await fetch(`${API_BASE}/admin/update-coefficients`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || '계수 업데이트 실패');
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('Update coefficients error:', error);
+            throw error;
+        }
+    }
 }
 
 // 전역에서 사용할 수 있도록 export
