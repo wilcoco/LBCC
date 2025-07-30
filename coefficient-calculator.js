@@ -202,46 +202,83 @@ class CoefficientCalculator {
      * 사용자 성과 요약 정보 조회
      */
     async getUserPerformanceSummary(username) {
-        const { UserModel } = require('./db/postgresql');
-        const { getPool } = require('./db/postgresql');
-        const client = getPool();
-        
-        const user = await UserModel.findByUsername(username);
-        if (!user) return null;
-        
-        // 최근 계수 변동 히스토리
-        const historyResult = await client.query(`
-            SELECT * FROM coefficient_history 
-            WHERE username = $1 
-            ORDER BY created_at DESC 
-            LIMIT 10
-        `, [username]);
-        
-        // 현재 총 효과적 지분 계산
-        const investmentsResult = await client.query(`
-            SELECT content_id, amount FROM investments 
-            WHERE username = $1
-        `, [username]);
-        
-        let totalEffectiveValue = 0;
-        for (const inv of investmentsResult.rows) {
-            const shares = await this.getEffectiveShares(inv.content_id);
-            const userShare = shares.find(s => s.username === username);
-            if (userShare) {
-                totalEffectiveValue += userShare.effectiveAmount;
+        try {
+            const { UserModel } = require('./db/postgresql');
+            const { getPool } = require('./db/postgresql');
+            const client = getPool();
+            
+            console.log(`🔍 getUserPerformanceSummary: ${username} 시작`);
+            
+            const user = await UserModel.findByUsername(username);
+            if (!user) {
+                console.log(`⚠️ 사용자 없음: ${username}`);
+                return null;
             }
+            
+            console.log(`📊 ${username} 사용자 데이터:`, {
+                coefficient: user.coefficient,
+                balance: user.balance,
+                total_invested: user.total_invested,
+                total_dividends: user.total_dividends
+            });
+            
+            // 최근 계수 변동 히스토리 (안전하게 처리)
+            let historyResult = { rows: [] };
+            try {
+                historyResult = await client.query(`
+                    SELECT * FROM coefficient_history 
+                    WHERE username = $1 
+                    ORDER BY created_at DESC 
+                    LIMIT 10
+                `, [username]);
+                console.log(`📈 ${username} 계수 히스토리: ${historyResult.rows.length}건`);
+            } catch (historyError) {
+                console.warn(`⚠️ ${username} 계수 히스토리 조회 실패:`, historyError.message);
+            }
+            
+            // 현재 총 효과적 지분 계산 (안전하게 처리)
+            let totalEffectiveValue = 0;
+            try {
+                const investmentsResult = await client.query(`
+                    SELECT content_id, amount FROM investments 
+                    WHERE username = $1
+                `, [username]);
+                
+                console.log(`💰 ${username} 투자 기록: ${investmentsResult.rows.length}건`);
+                
+                for (const inv of investmentsResult.rows) {
+                    try {
+                        const shares = await this.getEffectiveShares(inv.content_id);
+                        const userShare = shares.find(s => s.username === username);
+                        if (userShare) {
+                            totalEffectiveValue += userShare.effectiveAmount;
+                        }
+                    } catch (shareError) {
+                        console.warn(`⚠️ 컨텐츠 ${inv.content_id} 지분 계산 실패:`, shareError.message);
+                    }
+                }
+            } catch (investmentError) {
+                console.warn(`⚠️ ${username} 투자 기록 조회 실패:`, investmentError.message);
+            }
+            
+            const result = {
+                username: user.username,
+                currentCoefficient: parseFloat(user.coefficient || 1.0),
+                balance: user.balance || 0,
+                totalInvested: user.total_invested || 0,
+                totalDividends: user.total_dividends || 0,
+                totalEffectiveValue: totalEffectiveValue,
+                coefficientHistory: historyResult.rows || [],
+                lastUpdated: user.coefficient_updated_at || new Date().toISOString()
+            };
+            
+            console.log(`✅ ${username} 성과 요약 완료:`, result);
+            return result;
+            
+        } catch (error) {
+            console.error(`❌ getUserPerformanceSummary 오류 (${username}):`, error);
+            return null;
         }
-        
-        return {
-            username: user.username,
-            currentCoefficient: parseFloat(user.coefficient),
-            balance: user.balance,
-            totalInvested: user.total_invested,
-            totalDividends: user.total_dividends,
-            totalEffectiveValue: totalEffectiveValue,
-            coefficientHistory: historyResult.rows,
-            lastUpdated: user.coefficient_updated_at
-        };
     }
 }
 
