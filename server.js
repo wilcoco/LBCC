@@ -703,6 +703,50 @@ app.get('/api/users/:username/investments', async (req, res) => {
     }
 });
 
+// 🔍 디버깅: 투자 테이블 직접 조회
+app.get('/api/debug/investments', async (req, res) => {
+    try {
+        const { getPool } = require('./db/postgresql');
+        const client = getPool();
+        
+        console.log('🔍 투자 테이블 직접 조회 시작...');
+        
+        // 모든 투자 내역 조회
+        const allInvestments = await client.query('SELECT * FROM investments ORDER BY created_at DESC LIMIT 20');
+        console.log(`📊 전체 투자 내역: ${allInvestments.rows.length}건`);
+        
+        // l3 사용자 투자 내역
+        const l3Investments = await client.query('SELECT * FROM investments WHERE username = $1', ['l3']);
+        console.log(`👤 l3 투자 내역: ${l3Investments.rows.length}건`);
+        
+        // 테이블 스키마 정보
+        const schemaInfo = await client.query(`
+            SELECT column_name, data_type, is_nullable 
+            FROM information_schema.columns 
+            WHERE table_name = 'investments'
+            ORDER BY ordinal_position
+        `);
+        
+        res.json({
+            success: true,
+            totalInvestments: allInvestments.rows.length,
+            l3InvestmentCount: l3Investments.rows.length,
+            allInvestments: allInvestments.rows,
+            l3Investments: l3Investments.rows,
+            tableSchema: schemaInfo.rows,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('💥 투자 테이블 조회 오류:', error);
+        res.status(500).json({ 
+            error: '투자 테이블 조회 실패',
+            details: error.message,
+            code: error.code
+        });
+    }
+});
+
 // 🔍 디버깅: 모든 사용자 계수 조회
 app.get('/api/debug/coefficients', async (req, res) => {
     try {
