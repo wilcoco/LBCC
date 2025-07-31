@@ -256,27 +256,14 @@ class LaborValueCoinSystem {
             }, 1000);
         }
         
-        alert(result.message);
+            alert(result.message);
             
             // 투자 모달 닫기
             document.getElementById('invest-modal').style.display = 'none';
+            document.getElementById('invest-amount').value = '';
         } catch (error) {
             alert(error.message || '투자 실패');
         }
-
-        // 투자 히스토리 기록
-        content.investmentHistory.push({
-            investor: this.currentUser,
-            amount: amount,
-            timestamp: new Date().toISOString(),
-            totalInvestmentAfter: content.totalInvestment
-        });
-
-        this.saveData();
-        document.getElementById('invest-modal').style.display = 'none';
-        document.getElementById('invest-amount').value = '';
-        this.updateUI();
-        alert(`${amount} 코인을 투자했습니다.`);
     }
 
     async updateUI() {
