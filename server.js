@@ -526,33 +526,88 @@ app.get('/api/contents/:contentId/shares', async (req, res) => {
 
 
 
-// 📊 사용자별 투자 현황 조회 (초단순 버전)
+// 📊 사용자별 투자 현황 조회 (기본 DB 조회 버전)
 app.get('/api/users/:username/investments', async (req, res) => {
     try {
         const { username } = req.params;
-        console.log(`📊 초단순 ${username} 투자 현황 조회 시작`);
+        console.log(`📊 ${username} 투자 현황 조회 시작 (DB 버전)`);
         
-        // 기본 응답 반환 (데이터베이스 조회 없이)
+        const client = getPool();
+        
+        // 1. 사용자 존재 확인
+        const userCheck = await client.query('SELECT username FROM users WHERE username = $1', [username]);
+        if (userCheck.rows.length === 0) {
+            console.log(`❌ 사용자 찾을 수 없음: ${username}`);
+            return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+        }
+        
+        // 2. 사용자 투자 내역 조회 (NULL 안전 처리)
+        const investmentQuery = `
+            SELECT 
+                content_id,
+                COALESCE(amount, 0) as amount,
+                COALESCE(effective_amount, amount, 0) as effective_amount,
+                created_at
+            FROM investments 
+            WHERE username = $1 
+            ORDER BY created_at DESC
+        `;
+        
+        const investmentResult = await client.query(investmentQuery, [username]);
+        const userInvestments = investmentResult.rows;
+        
+        console.log(`📊 ${username} 투자 내역: ${userInvestments.length}건`);
+        
+        // 3. 투자 내역이 없는 경우
+        if (userInvestments.length === 0) {
+            console.log(`${username} - 투자 내역 없음`);
+            return res.json({
+                username,
+                totalInvested: 0,
+                totalDividends: 0,
+                investmentCount: 0,
+                investments: [],
+                message: 'DB 조회 완료 - 투자 내역 없음'
+            });
+        }
+        
+        // 4. 기본 투자 요약 계산
+        const totalInvested = userInvestments.reduce((sum, inv) => {
+            const amount = parseFloat(inv.effective_amount) || parseFloat(inv.amount) || 0;
+            return sum + amount;
+        }, 0);
+        
+        // 5. 투자 내역 포맷팅
+        const investments = userInvestments.map(inv => ({
+            contentId: inv.content_id,
+            amount: parseFloat(inv.effective_amount) || parseFloat(inv.amount) || 0,
+            createdAt: inv.created_at
+        }));
+        
         const response = {
-            username: username,
-            totalInvested: 0,
-            totalDividends: 0,
-            investmentCount: 0,
-            investments: [],
-            message: '초단순 버전 - 데이터베이스 조회 없이 기본 응답'
+            username,
+            totalInvested: Math.round(totalInvested * 100) / 100, // 소수점 2자리
+            totalDividends: 0, // 다음 단계에서 구현
+            investmentCount: userInvestments.length,
+            investments,
+            message: 'DB 조회 완료 - 기본 투자 정보'
         };
         
-        console.log(`✅ 초단순 ${username} 투자 현황 응답 완료`);
+        console.log(`✅ ${username} 투자 현황 응답 완료: ${response.investmentCount}건, 총 ${response.totalInvested}`);
         res.json(response);
         
     } catch (error) {
-        console.error(`❌ 초단순 ${req.params.username} 투자 현황 오류:`, error);
+        console.error(`❌ ${req.params.username} 투자 현황 DB 조회 오류:`, error);
+        console.error('오류 상세:', {
+            message: error.message,
+            code: error.code,
+            detail: error.detail
+        });
         
         res.status(500).json({ 
-            error: '초단순 투자 현황 조회 중 오류가 발생했습니다.',
+            error: '투자 현황 조회 중 오류가 발생했습니다.',
             details: error.message || '알 수 없는 오류',
-            code: error.code || 'UNKNOWN_ERROR',
-            stack: error.stack
+            code: error.code || 'UNKNOWN_ERROR'
         });
     }
 });
