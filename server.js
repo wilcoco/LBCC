@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { initializeDatabase, UserModel, ContentModel } = require('./db/postgresql');
+const { initializeDatabase, getPool, UserModel, ContentModel } = require('./db/postgresql');
 const { coefficientCalculator } = require('./coefficient-calculator');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
