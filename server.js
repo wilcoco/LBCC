@@ -621,6 +621,100 @@ app.get('/api/users/:username/investments', async (req, res) => {
     }
 });
 
+// 📊 사용자별 투자 현황 조회
+app.get('/api/users/:username/investments', async (req, res) => {
+    try {
+        const { username } = req.params;
+        console.log(`📊 ${username} 투자 현황 조회 요청`);
+        
+        const { getPool } = require('./db/postgresql');
+        const client = getPool();
+        
+        // 사용자의 모든 투자 내역 조회
+        const investmentQuery = `
+            SELECT 
+                i.content_id,
+                i.amount,
+                i.created_at,
+                c.title,
+                c.author,
+                (
+                    SELECT COALESCE(SUM(i2.amount), 0) 
+                    FROM investments i2 
+                    WHERE i2.content_id = i.content_id
+                ) as total_content_investment
+            FROM investments i
+            JOIN contents c ON i.content_id = c.id
+            WHERE i.username = $1
+            ORDER BY i.created_at DESC
+        `;
+        
+        const investmentResult = await client.query(investmentQuery, [username]);
+        
+        // 각 투자에 대한 배당 계산
+        const investments = [];
+        let totalInvested = 0;
+        let totalDividends = 0;
+        
+        for (const investment of investmentResult.rows) {
+            const contentId = investment.content_id;
+            const userAmount = parseFloat(investment.amount);
+            totalInvested += userAmount;
+            
+            // 해당 컨텐츠에 대한 사용자의 총 투자액 계산
+            const userTotalQuery = `
+                SELECT COALESCE(SUM(amount), 0) as user_total
+                FROM investments 
+                WHERE content_id = $1 AND username = $2
+            `;
+            const userTotalResult = await client.query(userTotalQuery, [contentId, username]);
+            const userTotalInvestment = parseFloat(userTotalResult.rows[0].user_total);
+            
+            // 해당 컨텐츠에서 받은 배당 계산
+            const dividendQuery = `
+                SELECT COALESCE(SUM(amount), 0) as dividends_received
+                FROM investments 
+                WHERE content_id = $1 AND username != $2 AND created_at > (
+                    SELECT MIN(created_at) FROM investments 
+                    WHERE content_id = $1 AND username = $2
+                )
+            `;
+            const dividendResult = await client.query(dividendQuery, [contentId, username]);
+            const dividendsReceived = parseFloat(dividendResult.rows[0].dividends_received);
+            
+            totalDividends += dividendsReceived;
+            
+            investments.push({
+                contentId: contentId,
+                title: investment.title,
+                author: investment.author,
+                amount: userAmount,
+                totalInvested: userTotalInvestment,
+                dividendsReceived: dividendsReceived,
+                investmentDate: investment.created_at,
+                totalContentInvestment: parseFloat(investment.total_content_investment)
+            });
+        }
+        
+        console.log(`✅ ${username} 투자 현황 조회 완료: ${investments.length}건`);
+        
+        res.json({
+            username,
+            totalInvested,
+            totalDividends,
+            investmentCount: investments.length,
+            investments
+        });
+        
+    } catch (error) {
+        console.error(`❌ ${req.params.username} 투자 현황 조회 오류:`, error);
+        res.status(500).json({ 
+            error: '투자 현황 조회 중 오류가 발생했습니다.',
+            details: error.message
+        });
+    }
+});
+
 // 🔍 디버깅: 모든 사용자 계수 조회
 app.get('/api/debug/coefficients', async (req, res) => {
     try {
