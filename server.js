@@ -621,92 +621,33 @@ app.get('/api/users/:username/investments', async (req, res) => {
     }
 });
 
-// 📊 사용자별 투자 현황 조회 (단순화된 버전)
+// 📊 사용자별 투자 현황 조회 (초단순 버전)
 app.get('/api/users/:username/investments', async (req, res) => {
     try {
         const { username } = req.params;
-        console.log(`📊 ${username} 투자 현황 조회 요청`);
+        console.log(`📊 초단순 ${username} 투자 현황 조회 시작`);
         
-        const { getPool } = require('./db/postgresql');
-        const client = getPool();
+        // 기본 응답 반환 (데이터베이스 조회 없이)
+        const response = {
+            username: username,
+            totalInvested: 0,
+            totalDividends: 0,
+            investmentCount: 0,
+            investments: [],
+            message: '초단순 버전 - 데이터베이스 조회 없이 기본 응답'
+        };
         
-        // 단순한 투자 내역 조회 (복잡한 JOIN 제거)
-        const investmentQuery = `
-            SELECT content_id, amount, created_at
-            FROM investments 
-            WHERE username = $1
-            ORDER BY created_at DESC
-        `;
-        
-        console.log(`🔍 ${username} 투자 내역 조회 시작...`);
-        const investmentResult = await client.query(investmentQuery, [username]);
-        console.log(`📊 ${username} 투자 내역: ${investmentResult.rows.length}건`);
-        
-        // 기본 투자 내역 처리
-        const investments = [];
-        let totalInvested = 0;
-        
-        for (const investment of investmentResult.rows) {
-            // NULL 값 안전 처리
-            const userAmount = parseFloat(investment.amount) || 0;
-            const effectiveAmount = investment.effective_amount ? parseFloat(investment.effective_amount) : userAmount;
-            const coefficientAtTime = investment.coefficient_at_time ? parseFloat(investment.coefficient_at_time) : 1.0;
-            
-            console.log(`📊 투자 데이터 처리: ID=${investment.id}, amount=${userAmount}, effective=${effectiveAmount}`);
-            
-            totalInvested += userAmount;
-            
-            // 컨텐츠 정보 별도 조회 (안전하게)
-            let contentTitle = '컨텐츠 제목 없음';
-            let contentAuthor = '작성자 없음';
-            
-            try {
-                const contentQuery = 'SELECT title, author FROM contents WHERE id = $1';
-                const contentResult = await client.query(contentQuery, [investment.content_id]);
-                if (contentResult.rows.length > 0) {
-                    contentTitle = contentResult.rows[0].title || contentTitle;
-                    contentAuthor = contentResult.rows[0].author || contentAuthor;
-                }
-            } catch (contentError) {
-                console.warn(`⚠️ 컨텐츠 ${investment.content_id} 정보 조회 실패:`, contentError.message);
-            }
-            
-            investments.push({
-                contentId: investment.content_id || 0,
-                title: contentTitle,
-                author: contentAuthor,
-                amount: userAmount,
-                effectiveAmount: effectiveAmount,
-                coefficientAtTime: coefficientAtTime,
-                totalInvested: userAmount, // 단순화: 개별 투자액만 표시
-                dividendsReceived: 0, // 단순화: 배당 계산 제거
-                investmentDate: investment.created_at || new Date().toISOString(),
-                totalContentInvestment: 0 // 단순화: 전체 투자액 계산 제거
-            });
-        }
-        
-        console.log(`✅ ${username} 투자 현황 조회 완료: ${investments.length}건, 총 투자액: ${totalInvested}`);
-        
-        res.json({
-            username,
-            totalInvested,
-            totalDividends: 0, // 단순화: 배당 계산 제거
-            investmentCount: investments.length,
-            investments
-        });
+        console.log(`✅ 초단순 ${username} 투자 현황 응답 완료`);
+        res.json(response);
         
     } catch (error) {
-        console.error(`❌ ${req.params.username} 투자 현황 조회 오류:`, error);
-        console.error('오류 상세 정보:', {
-            message: error.message,
-            stack: error.stack,
-            code: error.code
-        });
+        console.error(`❌ 초단순 ${req.params.username} 투자 현황 오류:`, error);
         
         res.status(500).json({ 
-            error: '투자 현황 조회 중 오류가 발생했습니다.',
+            error: '초단순 투자 현황 조회 중 오류가 발생했습니다.',
             details: error.message || '알 수 없는 오류',
-            code: error.code || 'UNKNOWN_ERROR'
+            code: error.code || 'UNKNOWN_ERROR',
+            stack: error.stack
         });
     }
 });
