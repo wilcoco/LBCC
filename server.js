@@ -647,7 +647,13 @@ app.get('/api/users/:username/investments', async (req, res) => {
         let totalInvested = 0;
         
         for (const investment of investmentResult.rows) {
+            // NULL 값 안전 처리
             const userAmount = parseFloat(investment.amount) || 0;
+            const effectiveAmount = investment.effective_amount ? parseFloat(investment.effective_amount) : userAmount;
+            const coefficientAtTime = investment.coefficient_at_time ? parseFloat(investment.coefficient_at_time) : 1.0;
+            
+            console.log(`📊 투자 데이터 처리: ID=${investment.id}, amount=${userAmount}, effective=${effectiveAmount}`);
+            
             totalInvested += userAmount;
             
             // 컨텐츠 정보 별도 조회 (안전하게)
@@ -666,13 +672,15 @@ app.get('/api/users/:username/investments', async (req, res) => {
             }
             
             investments.push({
-                contentId: investment.content_id,
+                contentId: investment.content_id || 0,
                 title: contentTitle,
                 author: contentAuthor,
                 amount: userAmount,
+                effectiveAmount: effectiveAmount,
+                coefficientAtTime: coefficientAtTime,
                 totalInvested: userAmount, // 단순화: 개별 투자액만 표시
                 dividendsReceived: 0, // 단순화: 배당 계산 제거
-                investmentDate: investment.created_at,
+                investmentDate: investment.created_at || new Date().toISOString(),
                 totalContentInvestment: 0 // 단순화: 전체 투자액 계산 제거
             });
         }
