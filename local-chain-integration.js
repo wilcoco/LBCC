@@ -139,7 +139,7 @@
                     `).join('')}
                 </ul>
                 <div style="margin-top: 10px;">
-                    <button onclick="laborValueCoinSystem.recoverFromLocalChain()" style="background: #38a169; color: white; border: none; padding: 8px 16px; border-radius: 4px; margin-right: 10px;">로컬 체인으로 복구</button>
+                    <button onclick="system.recoverFromLocalChain()" style="background: #38a169; color: white; border: none; padding: 8px 16px; border-radius: 4px; margin-right: 10px;">로컬 체인으로 복구</button>
                     <button onclick="this.parentElement.parentElement.remove()" style="background: #a0aec0; color: white; border: none; padding: 8px 16px; border-radius: 4px;">무시</button>
                 </div>
             </div>
