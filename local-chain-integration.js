@@ -162,7 +162,13 @@
                         investments: serverData.investments?.length || 0
                     });
                     console.log('불일치 상세:', verification.discrepancies);
-                    this.showDataDiscrepancyWarning(verification.discrepancies);
+                    
+                    // 자동 복구 옵션 제공
+                    if (confirm('데이터 불일치가 발견되었습니다. 서버 데이터를 기반으로 로컬 체인을 복구하시겠습니까?')) {
+                        this.syncLocalChainWithServer(serverData);
+                    } else {
+                        this.showDataDiscrepancyWarning(verification.discrepancies);
+                    }
                 } else {
                     console.log('✅ 서버 데이터와 로컬 체인 일치 확인');
                     alert('✅ 검증 완료: 서버 데이터와 로컬 체인이 일치합니다.');
@@ -427,6 +433,62 @@
 블록 수: ${chainInfo.blockCount}개
 
 실제 구현에서는 이 데이터를 서버에 전송하여 복구를 요청할 수 있습니다.`);
+    };
+
+    // 서버 데이터로 로컬 체인 동기화
+    LaborValueCoinSystem.prototype.syncLocalChainWithServer = async function(serverData) {
+        if (!this.localChain || !serverData.investments) {
+            console.error('로컬 체인 또는 서버 데이터가 없습니다.');
+            return;
+        }
+
+        try {
+            console.log('🔄 로컬 체인 동기화 시작...');
+            
+            // 현재 로컬 체인의 투자 블록들 가져오기
+            const localInvestBlocks = this.localChain.chain.blocks.filter(block => block.action === 'invest');
+            const localInvestments = new Set(localInvestBlocks.map(block => 
+                `${block.data.contentId}_${block.data.amount}_${block.timestamp}`
+            ));
+            
+            console.log(`로컬 체인 투자 블록: ${localInvestBlocks.length}개`);
+            console.log(`서버 투자 기록: ${serverData.investments.length}개`);
+            
+            // 서버에만 있고 로컬에 없는 투자들 찾기
+            let addedCount = 0;
+            for (const investment of serverData.investments) {
+                const investmentKey = `${investment.contentId}_${investment.amount}_${investment.createdAt}`;
+                
+                if (!localInvestments.has(investmentKey)) {
+                    // 누락된 투자 블록 추가
+                    const blockData = {
+                        contentId: investment.contentId,
+                        amount: investment.amount,
+                        contentTitle: investment.contentTitle,
+                        timestamp: investment.createdAt
+                    };
+                    
+                    this.localChain.addBlock('invest', blockData);
+                    addedCount++;
+                    console.log(`➕ 누락된 투자 블록 추가: ${investment.contentTitle} (${investment.amount}코인)`);
+                }
+            }
+            
+            // 로컬 체인 상태 업데이트
+            this.displayLocalChainStatus();
+            
+            console.log(`✅ 동기화 완료: ${addedCount}개 블록 추가`);
+            alert(`로컬 체인 동기화가 완료되었습니다. ${addedCount}개의 누락된 투자 블록을 추가했습니다.`);
+            
+            // 동기화 후 다시 검증
+            setTimeout(() => {
+                this.verifyServerData();
+            }, 1000);
+            
+        } catch (error) {
+            console.error('❌ 로컬 체인 동기화 오류:', error);
+            alert('로컬 체인 동기화 중 오류가 발생했습니다.');
+        }
     };
 
     console.log('🔗 로컬 체인 통합 모듈 로드 완료');
