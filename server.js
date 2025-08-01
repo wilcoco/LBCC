@@ -287,7 +287,33 @@ app.post('/api/invest', async (req, res) => {
         
     } catch (error) {
         console.error('❌ 투자 처리 오류:', error);
-        res.status(500).json({ error: '투자 처리 중 오류가 발생했습니다.' });
+        console.error('❌ 오류 스택:', error.stack);
+        console.error('❌ 요청 데이터:', { contentId, amount, username });
+        console.error('❌ 오류 세부사항:', {
+            message: error.message,
+            code: error.code,
+            detail: error.detail,
+            hint: error.hint,
+            position: error.position,
+            internalPosition: error.internalPosition,
+            internalQuery: error.internalQuery,
+            where: error.where,
+            schema: error.schema,
+            table: error.table,
+            column: error.column,
+            dataType: error.dataType,
+            constraint: error.constraint,
+            file: error.file,
+            line: error.line,
+            routine: error.routine
+        });
+        
+        res.status(500).json({ 
+            error: '투자 처리 중 오류가 발생했습니다.',
+            details: error.message,
+            code: error.code,
+            timestamp: new Date().toISOString()
+        });
     }
 });
 
