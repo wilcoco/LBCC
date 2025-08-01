@@ -1,6 +1,6 @@
 {
   "name": "cams-work-journal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "캠스 업무 일지 - Labor Value-Based Coin System",
   "main": "server.js",
   "scripts": {
