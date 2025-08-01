@@ -280,6 +280,63 @@ class CoefficientCalculator {
             return null;
         }
     }
+
+    /**
+     * Calculate dividend distribution for a new investment
+     * @param {string} contentId - Content ID being invested in
+     * @param {number} amount - Investment amount
+     * @returns {Array} Array of dividend distributions
+     */
+    async calculateDividendDistribution(contentId, amount) {
+        try {
+            console.log(`💰 배당 분배 계산 시작: 컨텐츠 ${contentId}, 투자액 ${amount}`);
+            
+            // Get all existing investors for this content
+            const shares = await this.getEffectiveShares(contentId);
+            
+            if (!shares || shares.length === 0) {
+                console.log('📊 기존 투자자 없음 - 배당 분배 없음');
+                return [];
+            }
+            
+            // Calculate total effective investment
+            const totalEffectiveInvestment = shares.reduce((sum, share) => sum + share.effectiveAmount, 0);
+            
+            if (totalEffectiveInvestment <= 0) {
+                console.log('📊 총 유효 투자액이 0 - 배당 분배 없음');
+                return [];
+            }
+            
+            // Calculate dividend distribution (10% of new investment)
+            const dividendPool = amount * 0.1;
+            console.log(`💰 배당 풀: ${dividendPool} (투자액의 10%)`);
+            
+            const distributions = [];
+            
+            for (const share of shares) {
+                const dividendRatio = share.effectiveAmount / totalEffectiveInvestment;
+                const dividendAmount = Math.floor(dividendPool * dividendRatio);
+                
+                if (dividendAmount > 0) {
+                    distributions.push({
+                        username: share.username,
+                        amount: dividendAmount,
+                        ratio: dividendRatio,
+                        effectiveShare: share.effectiveAmount
+                    });
+                    
+                    console.log(`💰 배당 분배: ${share.username} +${dividendAmount} (비율: ${(dividendRatio * 100).toFixed(2)}%)`);
+                }
+            }
+            
+            console.log(`✅ 배당 분배 완료: ${distributions.length}명에게 총 ${distributions.reduce((sum, d) => sum + d.amount, 0)} 배당`);
+            return distributions;
+            
+        } catch (error) {
+            console.error(`❌ calculateDividendDistribution 오류:`, error);
+            return [];
+        }
+    }
 }
 
 // 싱글톤 인스턴스 생성
