@@ -43,10 +43,22 @@ async function initializeDatabaseWithRetry() {
     }
 }
 
-// Initialize database
-initializeDatabaseWithRetry();
+// Initialize database (non-blocking)
+initializeDatabaseWithRetry().catch(error => {
+    console.error('❌ Database initialization completely failed, but server will continue:', error.message);
+});
 
 // API Routes
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development',
+        railway: !!process.env.RAILWAY_ENVIRONMENT
+    });
+});
 
 // User registration
 app.post('/api/register', async (req, res) => {
