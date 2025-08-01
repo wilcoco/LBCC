@@ -167,6 +167,41 @@ app.get('/api/contents', async (req, res) => {
     }
 });
 
+// Get user investments
+app.get('/api/users/:username/investments', async (req, res) => {
+    try {
+        const { username } = req.params;
+        console.log(`📊 사용자 투자 현황 조회: ${username}`);
+        
+        // 사용자 존재 확인
+        const user = await UserModel.findByUsername(username);
+        if (!user) {
+            return res.status(404).json({ error: '사용자를 찾을 수 없습니다.' });
+        }
+        
+        // 사용자 투자 현황 조회
+        const investments = await UserModel.getUserInvestments(username);
+        console.log(`✅ ${username} 투자 현황 조회 완료: ${investments.length}건`);
+        
+        // 로컬 체인 검증을 위한 데이터 구조로 반환
+        const response = {
+            totalInvested: user.total_invested || 0,
+            totalDividends: user.total_dividends || 0,
+            investmentCount: investments.length,
+            investments: investments
+        };
+        
+        res.json(response);
+        
+    } catch (error) {
+        console.error(`❌ 사용자 투자 현황 조회 오류 (${req.params.username}):`, error);
+        res.status(500).json({ 
+            error: '투자 현황 조회에 실패했습니다.',
+            details: error.message
+        });
+    }
+});
+
 // Create content
 app.post('/api/contents', async (req, res) => {
     try {
