@@ -402,20 +402,25 @@ class LaborValueCoinSystem {
     // 성과 요약 정보 업데이트
     updatePerformanceSummary(performance) {
         const summaryElement = document.getElementById('performance-summary');
-        if (summaryElement) {
+        if (summaryElement && performance) {
+            // Null 체크와 기본값 설정
+            const totalInvested = (performance.totalInvested || 0);
+            const totalDividends = (performance.totalDividends || 0);
+            const totalEffectiveValue = (performance.totalEffectiveValue || 0);
+            
             summaryElement.innerHTML = `
                 <div class="performance-stats">
                     <div class="stat-item">
                         <span class="stat-label">총 투자:</span>
-                        <span class="stat-value">${performance.totalInvested.toLocaleString()}코인</span>
+                        <span class="stat-value">${totalInvested.toLocaleString()}코인</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">총 배당:</span>
-                        <span class="stat-value">${performance.totalDividends.toLocaleString()}코인</span>
+                        <span class="stat-value">${totalDividends.toLocaleString()}코인</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">효과적 가치:</span>
-                        <span class="stat-value">${performance.totalEffectiveValue.toLocaleString()}코인</span>
+                        <span class="stat-value">${totalEffectiveValue.toLocaleString()}코인</span>
                     </div>
                 </div>
             `;
