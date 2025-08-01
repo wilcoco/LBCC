@@ -1,10 +1,38 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { initializeDatabase, getPool, UserModel, ContentModel } = require('./db/postgresql');
-const { coefficientCalculator } = require('./coefficient-calculator');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
+
+// 모듈 로드 with 오류 처리
+let initializeDatabase, getPool, UserModel, ContentModel, coefficientCalculator;
+
+try {
+    const dbModule = require('./db/postgresql');
+    ({ initializeDatabase, getPool, UserModel, ContentModel } = dbModule);
+    console.log('✅ 데이터베이스 모듈 로드 성공');
+} catch (error) {
+    console.error('❌ 데이터베이스 모듈 로드 실패:', error.message);
+    // 더미 함수들로 대체
+    initializeDatabase = async () => { console.log('데이터베이스 모듈 없음 - 더미 초기화'); };
+    getPool = () => null;
+    UserModel = { findByUsername: () => null, create: () => null };
+    ContentModel = { findAll: () => [], findById: () => null };
+}
+
+try {
+    const calcModule = require('./coefficient-calculator');
+    ({ coefficientCalculator } = calcModule);
+    console.log('✅ 계수 계산기 모듈 로드 성공');
+} catch (error) {
+    console.error('❌ 계수 계산기 모듈 로드 실패:', error.message);
+    // 더미 계수 계산기
+    coefficientCalculator = {
+        calculateDividendDistribution: () => [],
+        getUserCoefficient: () => 1.0,
+        getEffectiveShares: () => ({})
+    };
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -797,11 +825,26 @@ app.get('/', (req, res) => {
 });
 
 // 서버 시작
-app.listen(PORT, () => {
-    console.log(`🚀 캠스 업무 일지 서버가 포트 ${PORT}에서 실행 중입니다!`);
-    console.log(`📱 브라우저에서 http://localhost:${PORT} 접속하세요`);
-    console.log(`🎯 API 엔드포인트: http://localhost:${PORT}/api/`);
-});
+// 서버 시작 with 오류 처리
+try {
+    const server = app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 캠스 업무 일지 서버가 포트 ${PORT}에서 실행 중입니다!`);
+        console.log(`📱 브라우저에서 http://localhost:${PORT} 접속하세요`);
+        console.log(`🎯 API 엔드포인트: http://localhost:${PORT}/api/`);
+        console.log(`🌍 Railway 환경: ${process.env.RAILWAY_ENVIRONMENT || 'local'}`);
+    });
+    
+    server.on('error', (error) => {
+        console.error('❌ 서버 시작 오류:', error);
+        if (error.code === 'EADDRINUSE') {
+            console.error(`포트 ${PORT}가 이미 사용 중입니다.`);
+        }
+    });
+    
+} catch (error) {
+    console.error('❌ 서버 초기화 실패:', error);
+    process.exit(1);
+}
 
 // 종료 시 정리
 process.on('SIGINT', () => {
