@@ -561,13 +561,13 @@ class LaborValueCoinSystem {
                 }
                 
                 investmentElement.innerHTML = `
-                    <div class="investment-title">${investment.contentTitle}</div>
-                    <div class="investment-author">작성자: ${investment.contentAuthor}</div>
+                    <div class="investment-title">${investment.contentTitle || '제목 없음'}</div>
+                    <div class="investment-author">작성자: ${investment.contentAuthor || '알 수 없음'}</div>
                     <div class="investment-details">
-                        <span>내 투자액: ${investment.totalInvested.toLocaleString()} 코인</span>
+                        <span>내 투자액: ${(investment.totalInvested || 0).toLocaleString()} 코인</span>
                         <span style="color: #38a169;">받은 배당: ${(investment.totalDividends || 0).toLocaleString()} 코인</span>
-                        <span>현재 지분: ${investment.currentShare}%</span>
-                        <span>컨텐츠 총 투자: ${investment.totalContentInvestment.toLocaleString()} 코인</span>
+                        <span>현재 지분: ${investment.currentShare || '0'}%</span>
+                        <span>컨텐츠 총 투자: ${(investment.totalContentInvestment || 0).toLocaleString()} 코인</span>
                     </div>
                     ${dividendHistoryHtml}
                 `;

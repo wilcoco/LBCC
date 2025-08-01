@@ -360,7 +360,15 @@ app.post('/api/invest', async (req, res) => {
         
     } catch (error) {
         console.error('투자 처리 오류:', error);
-        res.status(500).json({ error: '투자 처리 중 오류가 발생했습니다.' });
+        console.error('오류 스택:', error.stack);
+        console.error('요청 데이터:', { contentId, amount, username });
+        
+        // 더 상세한 오류 정보 반환
+        res.status(500).json({ 
+            error: '투자 처리 중 오류가 발생했습니다.',
+            details: error.message,
+            timestamp: new Date().toISOString()
+        });
     }
 });
 
