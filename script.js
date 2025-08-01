@@ -542,8 +542,10 @@ class LaborValueCoinSystem {
                 </div>
             `;
             
-            // 각 투자 내역 표시
-            investmentData.investments.forEach(investment => {
+            // 각 투자 내역 표시 (배열 체크 추가)
+            const investments = investmentData.investments || [];
+            if (Array.isArray(investments) && investments.length > 0) {
+                investments.forEach(investment => {
                 const investmentElement = document.createElement('div');
                 investmentElement.className = 'investment-item';
                 
@@ -576,22 +578,22 @@ class LaborValueCoinSystem {
                     </div>
                     ${dividendHistoryHtml}
                 `;
-                container.appendChild(investmentElement);
-            });
-            
-        } catch (error) {
-            console.error('투자 현황 로드 실패:', error);
-            // 오류 대신 친절한 메시지 표시
-            container.innerHTML = `
-                <div style="text-align: center; padding: 30px; color: #4a5568;">
+                    container.appendChild(investmentElement);
+                });
+            } else {
+                // 투자 내역이 없거나 잘못된 형식일 때
+                const noInvestmentElement = document.createElement('div');
+                noInvestmentElement.style.cssText = 'text-align: center; padding: 30px; color: #4a5568;';
+                noInvestmentElement.innerHTML = `
                     <div style="font-size: 48px; margin-bottom: 16px;">💰</div>
                     <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #2d3748;">아직 투자 내역이 없습니다</div>
                     <div style="font-size: 14px; color: #718096; line-height: 1.5;">
-                        마음에 드는 컨텐츠에 투자해보세요!<br>
+                        마음에 드는 컨텐츠에 투자해보세요!<br/>
                         좋은 컨텐츠를 먼저 발견하면 더 많은 배당을 받을 수 있습니다.
                     </div>
-                </div>
-            `;
+                `;
+                container.appendChild(noInvestmentElement);
+            }
         }
     }
 

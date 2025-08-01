@@ -405,6 +405,65 @@ class UserModel {
             }
         }
     }
+
+    static async getUserInvestments(username) {
+        const client = getPool();
+        
+        try {
+            console.log(`📊 ${username} 투자 내역 조회 시작...`);
+            
+            // 사용자의 모든 투자 내역 조회
+            const investmentsResult = await client.query(`
+                SELECT 
+                    i.id,
+                    i.content_id,
+                    i.amount,
+                    i.effective_amount,
+                    i.coefficient_at_time,
+                    i.created_at,
+                    c.title as content_title,
+                    c.author as content_author,
+                    c.total_investment as total_content_investment
+                FROM investments i
+                JOIN contents c ON i.content_id = c.id
+                WHERE i.username = $1
+                ORDER BY i.created_at DESC
+            `, [username]);
+            
+            const investments = [];
+            
+            for (const investment of investmentsResult.rows) {
+                // 각 투자에 대한 배당 내역 조회 (예시용)
+                const dividendHistory = [];
+                
+                // 투자 정보 구성
+                const investmentData = {
+                    id: investment.id,
+                    contentId: investment.content_id,
+                    contentTitle: investment.content_title,
+                    contentAuthor: investment.content_author,
+                    amount: investment.amount,
+                    effectiveAmount: investment.effective_amount || investment.amount,
+                    coefficientAtTime: investment.coefficient_at_time || 1.0,
+                    totalInvested: investment.amount,
+                    totalDividends: 0, // 배당 내역이 있다면 계산
+                    currentShare: 0, // 현재 지분율 계산 필요
+                    totalContentInvestment: investment.total_content_investment || 0,
+                    createdAt: investment.created_at,
+                    dividendHistory
+                };
+                
+                investments.push(investmentData);
+            }
+            
+            console.log(`✅ ${username} 투자 내역 조회 완료: ${investments.length}건`);
+            return investments;
+            
+        } catch (error) {
+            console.error(`❌ getUserInvestments 오류 (${username}):`, error);
+            return [];
+        }
+    }
 }
 
 // 컨텐츠 관련 함수들
