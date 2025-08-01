@@ -9,11 +9,33 @@
 
     // 로컬 체인 초기화
     LaborValueCoinSystem.prototype.initializeLocalChain = function() {
-        if (this.currentUser && typeof LocalChain !== 'undefined') {
+        try {
+            console.log('🔗 로컬 체인 초기화 시도...');
+            console.log('현재 사용자:', this.currentUser);
+            console.log('LocalChain 클래스 존재:', typeof LocalChain !== 'undefined');
+            
+            if (!this.currentUser) {
+                console.warn('⚠️ 로컬 체인 초기화 실패: 사용자가 로그인되지 않음');
+                return;
+            }
+            
+            if (typeof LocalChain === 'undefined') {
+                console.error('❌ 로컬 체인 초기화 실패: LocalChain 클래스를 찾을 수 없음');
+                return;
+            }
+            
             this.localChain = new LocalChain(this.currentUser);
-            console.log(`🔗 로컬 체인 초기화 완료: ${this.currentUser}`);
+            console.log(`✅ 로컬 체인 초기화 완료: ${this.currentUser}`);
             console.log('체인 정보:', this.localChain.getChainInfo());
+            
+            // 로컬 체인 상태 표시
             this.displayLocalChainStatus();
+            
+            // 로컬 체인 이벤트 설정
+            this.setupLocalChainEvents();
+            
+        } catch (error) {
+            console.error('❌ 로컬 체인 초기화 오류:', error);
         }
     };
 
@@ -97,24 +119,50 @@
 
     // 서버 데이터와 로컬 체인 비교
     LaborValueCoinSystem.prototype.verifyServerData = async function() {
-        if (!this.localChain || !this.currentUser) return;
+        console.log('🔍 서버 데이터 검증 시작...');
+        
+        if (!this.localChain) {
+            console.warn('⚠️ 로컬 체인이 초기화되지 않음');
+            alert('로컬 체인이 초기화되지 않았습니다. 다시 로그인해주세요.');
+            return { verified: false, error: '로컬 체인 없음' };
+        }
+        
+        if (!this.currentUser) {
+            console.warn('⚠️ 사용자가 로그인되지 않음');
+            alert('로그인이 필요합니다.');
+            return { verified: false, error: '로그인 필요' };
+        }
         
         try {
+            console.log('📡 서버에서 사용자 투자 현황 조회 중...');
+            
             // 서버에서 사용자 투자 현황 가져오기
             const serverData = await APIClient.getUserInvestments(this.currentUser);
+            console.log('📊 서버 데이터:', serverData);
             
             // 로컬 체인과 비교
-            const verification = this.localChain.verifyWithServer(serverData);
-            
-            if (!verification.verified) {
-                this.showDataDiscrepancyWarning(verification.discrepancies);
+            if (typeof this.localChain.verifyWithServer === 'function') {
+                const verification = this.localChain.verifyWithServer(serverData);
+                console.log('🔍 검증 결과:', verification);
+                
+                if (!verification.verified) {
+                    console.warn('⚠️ 데이터 불일치 발견');
+                    this.showDataDiscrepancyWarning(verification.discrepancies);
+                } else {
+                    console.log('✅ 서버 데이터와 로컬 체인 일치 확인');
+                    alert('✅ 검증 완료: 서버 데이터와 로컬 체인이 일치합니다.');
+                }
+                
+                return verification;
             } else {
-                console.log('✅ 서버 데이터와 로컬 체인 일치 확인');
+                console.error('❌ verifyWithServer 메서드를 찾을 수 없음');
+                alert('검증 기능에 오류가 있습니다.');
+                return { verified: false, error: 'verifyWithServer 메서드 없음' };
             }
             
-            return verification;
         } catch (error) {
-            console.error('서버 데이터 검증 실패:', error);
+            console.error('❌ 서버 데이터 검증 실패:', error);
+            alert(`검증 중 오류가 발생했습니다: ${error.message}`);
             return { verified: false, error: error.message };
         }
     };
@@ -234,10 +282,36 @@
             <div style="margin-bottom: 2px;">머클 루트: <span style="color: #fbd38d;">${chainInfo.merkleRoot ? chainInfo.merkleRoot.substring(0, 10) + '...' : 'N/A'}</span></div>
             <div style="margin-bottom: 8px;">검증: ${chainInfo.validation.valid ? '<span style="color: #68d391;">✅</span>' : '<span style="color: #fc8181;">❌</span>'}</div>
             <div>
-                <button onclick="laborValueCoinSystem.showLocalChainVisualization()" style="background: #4299e1; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 10px; margin-right: 5px; cursor: pointer;">체인 보기</button>
-                <button onclick="laborValueCoinSystem.verifyServerData()" style="background: #38a169; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 10px; cursor: pointer;">검증</button>
+                <button id="chain-view-btn" style="background: #4299e1; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 10px; margin-right: 5px; cursor: pointer;">체인 보기</button>
+                <button id="chain-verify-btn" style="background: #38a169; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 10px; cursor: pointer;">검증</button>
             </div>
         `;
+        
+        // 이벤트 리스너 설정
+        const chainViewBtn = statusContainer.querySelector('#chain-view-btn');
+        const chainVerifyBtn = statusContainer.querySelector('#chain-verify-btn');
+        
+        if (chainViewBtn) {
+            chainViewBtn.addEventListener('click', () => {
+                try {
+                    this.showLocalChainVisualization();
+                } catch (error) {
+                    console.error('체인 보기 오류:', error);
+                    alert('체인 보기 기능에 오류가 발생했습니다.');
+                }
+            });
+        }
+        
+        if (chainVerifyBtn) {
+            chainVerifyBtn.addEventListener('click', () => {
+                try {
+                    this.verifyServerData();
+                } catch (error) {
+                    console.error('검증 오류:', error);
+                    alert('검증 기능에 오류가 발생했습니다.');
+                }
+            });
+        }
     };
 
     // 로컬 체인 시각화 표시
