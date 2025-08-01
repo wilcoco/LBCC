@@ -110,13 +110,27 @@ class LaborValueCoinSystem {
             this.handleFileUpload(e.target.files);
         });
 
-        // 투자
-        document.getElementById('invest-submit').addEventListener('click', () => {
+        // 투자 (중복 클릭 방지 추가)
+        document.getElementById('invest-submit').addEventListener('click', async () => {
+            const investButton = document.getElementById('invest-submit');
             const amount = parseInt(document.getElementById('invest-amount').value);
             const contentId = parseInt(document.getElementById('invest-modal').dataset.contentId);
             
-            if (amount > 0) {
-                this.investInContent(contentId, amount);
+            // 중복 클릭 방지
+            if (investButton.disabled || !amount || amount <= 0) {
+                return;
+            }
+            
+            // 버튼 비활성화 및 로딩 상태 표시
+            investButton.disabled = true;
+            investButton.textContent = '투자 중...';
+            
+            try {
+                await this.investInContent(contentId, amount);
+            } finally {
+                // 버튼 상태 복원
+                investButton.disabled = false;
+                investButton.textContent = '투자';
             }
         });
     }
@@ -217,52 +231,68 @@ class LaborValueCoinSystem {
         }
         
         try {
+            console.log(`💰 투자 시작: 컴텐츠 ${contentId}, 금액 ${amount}`);
+            
+            // API 호출
             const result = await APIClient.invest(contentId, amount, this.currentUser);
+            console.log('🎯 투자 API 응답:', result);
             
             // 사용자 정보 업데이트
-            if (this.currentUserData) {
+            if (this.currentUserData && result.newBalance !== undefined) {
                 this.currentUserData.balance = result.newBalance;
+                console.log('💳 사용자 잔액 업데이트:', result.newBalance);
             }
             
-            // 컨텐츠 목록 새로고침
+            // 컴텐츠 목록 새로고침 (순차적 업데이트)
+            console.log('🔄 컴텐츠 목록 새로고침 시작...');
             this.contents = await APIClient.getContents();
+            console.log('✅ 컴텐츠 목록 새로고침 완료');
             
-            // 🎯 UI 업데이트 (계수 정보 포함)
+            // UI 업데이트 (계수 정보 포함)
+            console.log('🎯 UI 업데이트 시작...');
             await this.updateUI();
+            console.log('✅ UI 업데이트 완료');
             
-            // 투자 현황도 새로고침
+            // 투자 현황 새로고침
             if (this.currentUser && this.currentUserData) {
-                this.updateInvestmentsList();
+                console.log('📊 투자 현황 새로고침 시작...');
+                await this.updateInvestmentsList();
+                console.log('✅ 투자 현황 새로고침 완료');
             }
-        
-        // 로컬 체인에 투자 블록 추가
-        if (this.localChain) {
-            const blockData = {
-                contentId: contentId,
-                amount: amount,
-                newBalance: result.newBalance,
-                timestamp: new Date().toISOString(),
-                serverResponse: {
-                    success: result.success,
-                    message: result.message
-                }
-            };
             
-            this.localChain.addBlock('invest', blockData);
+            // 로컬 체인에 투자 블록 추가
+            if (this.localChain) {
+                const blockData = {
+                    contentId: contentId,
+                    amount: amount,
+                    newBalance: result.newBalance,
+                    timestamp: new Date().toISOString(),
+                    serverResponse: {
+                        success: result.success,
+                        message: result.message
+                    }
+                };
+                
+                this.localChain.addBlock('invest', blockData);
+                
+                // 서버 데이터와 비교 검증 (2초 후)
+                setTimeout(() => {
+                    this.verifyServerData();
+                }, 2000);
+            }
             
-            // 서버 데이터와 비교 검증 (1초 후)
-            setTimeout(() => {
-                this.verifyServerData();
-            }, 1000);
-        }
-        
-            alert(result.message);
+            // 성공 메시지 표시
+            alert(result.message || '투자가 성공적으로 완료되었습니다!');
             
             // 투자 모달 닫기
             document.getElementById('invest-modal').style.display = 'none';
             document.getElementById('invest-amount').value = '';
+            
+            console.log('✅ 투자 전체 프로세스 완료');
+            
         } catch (error) {
-            alert(error.message || '투자 실패');
+            console.error('❌ 투자 오류:', error);
+            alert(error.message || '투자 실패: 서버 오류가 발생했습니다.');
         }
     }
 
