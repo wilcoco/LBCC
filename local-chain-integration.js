@@ -119,6 +119,17 @@
 
     // 서버 데이터와 로컬 체인 비교
     LaborValueCoinSystem.prototype.verifyServerData = async function() {
+        if (!this.localChain || !this.currentUser) {
+            console.warn('⚠️ 로컬 체인 또는 사용자 정보가 없습니다.');
+            return;
+        }
+
+        // 동기화 진행 중이면 중복 실행 방지
+        if (this.isSyncing) {
+            console.log('🔄 동기화 진행 중이므로 검증을 건너뜁니다.');
+            return;
+        }
+
         console.log('🔍 서버 데이터 검증 시작...');
         
         if (!this.localChain) {
