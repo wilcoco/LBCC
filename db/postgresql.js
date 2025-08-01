@@ -449,6 +449,12 @@ class UserModel {
                 // 각 투자에 대한 배당 내역 조회 (예시용)
                 const dividendHistory = [];
                 
+                // 지분율 계산 (사용자 투자액 / 컨텐츠 총 투자액 * 100)
+                const totalContentInvestment = investment.total_content_investment || 0;
+                const userInvestmentAmount = investment.amount || 0;
+                const currentShare = totalContentInvestment > 0 ? 
+                    (userInvestmentAmount / totalContentInvestment * 100) : 0;
+                
                 // 투자 정보 구성
                 const investmentData = {
                     id: investment.id,
@@ -460,8 +466,8 @@ class UserModel {
                     coefficientAtTime: investment.coefficient_at_time || 1.0,
                     totalInvested: investment.amount,
                     totalDividends: 0, // 배당 내역이 있다면 계산
-                    currentShare: 0, // 현재 지분율 계산 필요
-                    totalContentInvestment: investment.total_content_investment || 0,
+                    currentShare: Math.round(currentShare * 100) / 100, // 소수점 2자리까지
+                    totalContentInvestment: totalContentInvestment,
                     createdAt: investment.created_at,
                     dividendHistory
                 };
