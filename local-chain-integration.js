@@ -445,32 +445,37 @@
         try {
             console.log('🔄 로컬 체인 동기화 시작...');
             
-            // 현재 로컬 체인의 투자 블록들 가져오기
-            const localInvestBlocks = this.localChain.chain.blocks.filter(block => block.action === 'invest');
-            const localInvestments = new Set(localInvestBlocks.map(block => 
-                `${block.data.contentId}_${block.data.amount}_${block.timestamp}`
-            ));
+            // 동기화 진행 중 플래그 설정
+            this.isSyncing = true;
             
-            console.log(`로컬 체인 투자 블록: ${localInvestBlocks.length}개`);
-            console.log(`서버 투자 기록: ${serverData.investments.length}개`);
+            // 로컬 체인 완전 초기화 후 서버 데이터로 재구성
+            console.log('🗑️ 로컬 체인 완전 초기화 중...');
             
-            // 서버에만 있고 로컬에 없는 투자들 찾기
+            // 기존 로컬 체인 삭제
+            localStorage.removeItem(this.localChain.storageKey);
+            
+            // 새로운 로컬 체인 생성
+            this.localChain = new LocalChain(this.currentUser);
+            console.log('✅ 새로운 로컬 체인 생성 완료');
+            
+            // 서버 데이터를 기반으로 투자 블록 추가
             let addedCount = 0;
+            console.log(`서버에서 ${serverData.investments.length}개 투자 기록 복원 중...`);
+            
             for (const investment of serverData.investments) {
-                const investmentKey = `${investment.contentId}_${investment.amount}_${investment.createdAt}`;
-                
-                if (!localInvestments.has(investmentKey)) {
-                    // 누락된 투자 블록 추가
+                try {
                     const blockData = {
                         contentId: investment.contentId,
                         amount: investment.amount,
-                        contentTitle: investment.contentTitle,
+                        contentTitle: investment.contentTitle || '알 수 없는 컨텐츠',
                         timestamp: investment.createdAt
                     };
                     
                     this.localChain.addBlock('invest', blockData);
                     addedCount++;
-                    console.log(`➕ 누락된 투자 블록 추가: ${investment.contentTitle} (${investment.amount}코인)`);
+                    console.log(`➕ 투자 블록 복원: ${blockData.contentTitle} (${investment.amount}코인)`);
+                } catch (error) {
+                    console.error(`❌ 투자 블록 추가 실패:`, investment, error);
                 }
             }
             
@@ -478,16 +483,23 @@
             this.displayLocalChainStatus();
             
             console.log(`✅ 동기화 완료: ${addedCount}개 블록 추가`);
-            alert(`로컬 체인 동기화가 완료되었습니다. ${addedCount}개의 누락된 투자 블록을 추가했습니다.`);
+            console.log('✅ 동기화 완료:', `${addedCount}개 블록 복원`);
             
-            // 동기화 후 다시 검증
-            setTimeout(() => {
-                this.verifyServerData();
-            }, 1000);
+            // 동기화 완료 후 상태 업데이트
+            this.updateLocalChainStatus();
+            
+            // 성공 메시지 표시
+            alert(`로컬 체인이 서버 데이터로 완전히 복원되었습니다.\n복원된 투자 블록: ${addedCount}개`);
+            
+            console.log('🎉 로컬 체인 복원 완료');
+            return true;
             
         } catch (error) {
             console.error('❌ 로컬 체인 동기화 오류:', error);
             alert('로컬 체인 동기화 중 오류가 발생했습니다.');
+        } finally {
+            // 동기화 완료 후 플래그 해제
+            this.isSyncing = false;
         }
     };
 
