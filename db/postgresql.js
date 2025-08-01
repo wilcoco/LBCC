@@ -139,12 +139,29 @@ async function initializeDatabase() {
                 files JSONB DEFAULT '[]',
                 author VARCHAR(255) NOT NULL,
                 total_investment INTEGER DEFAULT 0,
+                investor_count INTEGER DEFAULT 0,
+                average_investment DECIMAL(15,4) DEFAULT 0,
                 investors JSONB DEFAULT '{}',
                 investment_history JSONB DEFAULT '[]',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
+        
+        // 기존 contents 테이블에 새 컬럼 추가 (없는 경우에만)
+        try {
+            await client.query(`
+                ALTER TABLE contents 
+                ADD COLUMN IF NOT EXISTS investor_count INTEGER DEFAULT 0
+            `);
+            await client.query(`
+                ALTER TABLE contents 
+                ADD COLUMN IF NOT EXISTS average_investment DECIMAL(15,4) DEFAULT 0
+            `);
+            console.log('✅ contents 테이블에 통계 컬럼 추가 완료');
+        } catch (alterError) {
+            console.log('📝 contents 통계 컬럼 이미 존재하거나 추가 실패:', alterError.message);
+        }
 
         // 투자 테이블 생성
         await client.query(`
@@ -222,17 +239,13 @@ class UserModel {
     static async addInvestment(username, investment) {
         const client = getPool();
         
-        // 투자 기록 추가
-        await client.query(
-            'INSERT INTO investments (username, content_id, amount) VALUES ($1, $2, $3)',
-            [username, investment.contentId, investment.amount]
-        );
-
-        // 사용자 총 투자액 업데이트
+        // 사용자 총 투자액만 업데이트 (투자 기록은 ContentModel.addInvestment에서 처리)
         await client.query(
             'UPDATE users SET total_invested = total_invested + $1, updated_at = CURRENT_TIMESTAMP WHERE username = $2',
             [investment.amount, username]
         );
+        
+        console.log(`📊 사용자 ${username} 총 투자액 업데이트: +${investment.amount}`);
     }
 
     static async addDividend(username, amount) {
@@ -492,7 +505,10 @@ class ContentModel {
             tags: row.tags || [],
             files: row.files || [],
             investors: row.investors || {},
-            investmentHistory: row.investment_history || []
+            investmentHistory: row.investment_history || [],
+            investorCount: row.investor_count || 0,
+            averageInvestment: row.average_investment || 0,
+            totalInvestment: row.total_investment || 0
         }));
     }
 
@@ -527,6 +543,9 @@ class ContentModel {
             `, [contentId, investmentData.username, investmentData.amount, new Date()]);
             
             console.log(`💰 새 투자 기록 생성: ${investmentData.username} → 컨텐츠 ${contentId} (${investmentData.amount}코인)`);
+            
+            // 컨텐츠 통계 업데이트
+            await this.updateContentStats(contentId);
             
             return result.rows[0];
             
@@ -563,6 +582,46 @@ class ContentModel {
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $4
         `, [newTotalInvestment, JSON.stringify(updatedInvestors), JSON.stringify(updatedHistory), contentId]);
+    }
+
+    static async updateContentStats(contentId) {
+        const client = getPool();
+        
+        try {
+            // 해당 컨텐츠의 모든 투자 정보 집계
+            const statsResult = await client.query(`
+                SELECT 
+                    COUNT(DISTINCT username) as investor_count,
+                    COALESCE(SUM(amount), 0) as total_investment,
+                    COALESCE(AVG(amount), 0) as average_investment
+                FROM investments 
+                WHERE content_id = $1
+            `, [contentId]);
+            
+            const stats = statsResult.rows[0];
+            
+            // contents 테이블의 통계 정보 업데이트
+            await client.query(`
+                UPDATE contents 
+                SET 
+                    total_investment = $1,
+                    investor_count = $2,
+                    average_investment = $3,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $4
+            `, [
+                parseFloat(stats.total_investment),
+                parseInt(stats.investor_count),
+                parseFloat(stats.average_investment),
+                contentId
+            ]);
+            
+            console.log(`📊 컨텐츠 ${contentId} 통계 업데이트: 총투자액=${stats.total_investment}, 투자자수=${stats.investor_count}, 평균투자액=${parseFloat(stats.average_investment).toFixed(2)}`);
+            
+        } catch (error) {
+            console.error(`❌ 컨텐츠 ${contentId} 통계 업데이트 실패:`, error);
+            throw error;
+        }
     }
 }
 
