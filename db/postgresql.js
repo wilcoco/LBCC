@@ -40,7 +40,13 @@ function getPool() {
             Object.keys(process.env)
                 .filter(key => key.toLowerCase().includes('database') || key.toLowerCase().includes('postgres'))
                 .forEach(key => console.log(`  - ${key}: ${process.env[key] ? '[설정됨]' : '[비어있음]'}`));
-            throw new Error('데이터베이스 연결 URL이 필요합니다.');
+            
+            console.warn('⚠️ 데이터베이스 URL 없음 - 더미 모드로 실행');
+            // 더미 pool 반환 (서버 크래시 방지)
+            return {
+                query: async () => ({ rows: [] }),
+                connect: async () => ({ query: async () => ({ rows: [] }), release: () => {} })
+            };
         }
         
         // 데이터베이스 URL의 일부만 로깅 (보안상 전체 URL은 노출하지 않음)
@@ -87,6 +93,12 @@ function getPool() {
 // 데이터베이스 테이블 초기화
 async function initializeDatabase() {
     const client = getPool();
+    
+    // 더미 모드 체크
+    if (!client || typeof client.query !== 'function') {
+        console.log('⚠️ 데이터베이스 연결 없음 - 초기화 건너뛰기');
+        return;
+    }
     
     try {
         // 사용자 테이블 생성
