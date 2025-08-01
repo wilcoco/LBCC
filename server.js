@@ -404,6 +404,31 @@ app.get('/api/users/:username/investments', async (req, res) => {
     }
 });
 
+// Database reset API (for development/debugging)
+app.post('/api/reset-database', async (req, res) => {
+    try {
+        console.log('🗑️ Database reset requested...');
+        
+        const { resetDatabase } = require('./reset-database');
+        await resetDatabase();
+        
+        console.log('✅ Database reset completed successfully');
+        res.json({ 
+            success: true, 
+            message: '데이터베이스가 성공적으로 초기화되었습니다.',
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        console.error('❌ Database reset failed:', error);
+        res.status(500).json({ 
+            error: '데이터베이스 초기화 중 오류가 발생했습니다.',
+            details: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 // Server startup
 try {
     const server = app.listen(PORT, '0.0.0.0', () => {

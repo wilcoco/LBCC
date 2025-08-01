@@ -13,15 +13,15 @@ async function resetDatabase() {
         await client.query('DELETE FROM investments');
         console.log('✅ investments 테이블 초기화 완료');
         
-        await client.query('DELETE FROM content');
-        console.log('✅ content 테이블 초기화 완료');
+        await client.query('DELETE FROM contents');
+        console.log('✅ contents 테이블 초기화 완료');
         
         await client.query('DELETE FROM users');
         console.log('✅ users 테이블 초기화 완료');
         
         // 시퀀스 초기화 (ID 카운터 리셋)
         await client.query('ALTER SEQUENCE users_id_seq RESTART WITH 1');
-        await client.query('ALTER SEQUENCE content_id_seq RESTART WITH 1');
+        await client.query('ALTER SEQUENCE contents_id_seq RESTART WITH 1');
         await client.query('ALTER SEQUENCE investments_id_seq RESTART WITH 1');
         await client.query('ALTER SEQUENCE coefficient_history_id_seq RESTART WITH 1');
         console.log('✅ 모든 시퀀스 초기화 완료');
