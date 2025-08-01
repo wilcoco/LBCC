@@ -140,6 +140,10 @@
             const serverData = await APIClient.getUserInvestments(this.currentUser);
             console.log('📊 서버 데이터:', serverData);
             
+            // 로컬 체인 데이터 확인
+            const localSummary = this.localChain.getActionSummary();
+            console.log('📊 로컬 체인 데이터:', localSummary);
+            
             // 로컬 체인과 비교
             if (typeof this.localChain.verifyWithServer === 'function') {
                 const verification = this.localChain.verifyWithServer(serverData);
@@ -147,6 +151,17 @@
                 
                 if (!verification.verified) {
                     console.warn('⚠️ 데이터 불일치 발견');
+                    console.log('로컬 체인:', {
+                        totalInvested: localSummary.totalInvested,
+                        investmentCount: localSummary.investmentCount,
+                        totalBlocks: localSummary.totalBlocks
+                    });
+                    console.log('서버 데이터:', {
+                        totalInvested: serverData.totalInvested,
+                        investmentCount: serverData.investmentCount,
+                        investments: serverData.investments?.length || 0
+                    });
+                    console.log('불일치 상세:', verification.discrepancies);
                     this.showDataDiscrepancyWarning(verification.discrepancies);
                 } else {
                     console.log('✅ 서버 데이터와 로컬 체인 일치 확인');
