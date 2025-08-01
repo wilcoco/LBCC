@@ -241,10 +241,41 @@ app.post('/api/invest', async (req, res) => {
             return res.status(400).json({ error: '존재하지 않는 컨텐츠입니다.' });
         }
         
-        // 간단한 투자 처리 (복잡한 계수 계산 제거)
-        console.log('💰 기본 투자 처리 시작...');
+        // 안전한 투자 처리 (계수 계산 시스템 포함)
+        console.log('💰 고급 투자 처리 시작...');
         
-        // 새로운 투자 기록 (investments 테이블에 추가)
+        // 1단계: 배당 분배 계산 (안전한 버전)
+        let dividendDistribution = [];
+        let dividendError = null;
+        
+        try {
+            console.log('💰 배당 분배 계산 시작...');
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('배당 계산 타임아웃')), 5000)
+            );
+            
+            const dividendPromise = coefficientCalculator.calculateDividendDistribution(contentId, amount);
+            dividendDistribution = await Promise.race([dividendPromise, timeoutPromise]);
+            
+            console.log(`💰 배당 분배 계산 완료: ${dividendDistribution.length}명`);
+            
+            // 배당 지급 (각각 안전하게 처리)
+            for (const dividend of dividendDistribution) {
+                try {
+                    await UserModel.addDividend(dividend.username, dividend.amount);
+                    console.log(`💰 배당 지급: ${dividend.username} +${dividend.amount}`);
+                } catch (dividendPayError) {
+                    console.error(`⚠️ 배당 지급 실패 (${dividend.username}):`, dividendPayError.message);
+                }
+            }
+            
+        } catch (error) {
+            dividendError = error.message;
+            console.error('⚠️ 배당 분배 실패, 기본 투자 진행:', error.message);
+            dividendDistribution = [];
+        }
+        
+        // 2단계: 투자 기록 추가
         console.log('📝 투자 기록 추가...');
         const investment = await ContentModel.addInvestment(contentId, {
             username,
@@ -252,26 +283,74 @@ app.post('/api/invest', async (req, res) => {
         });
         console.log(`✅ 투자 기록 추가 완료: ID ${investment.id}`);
         
-        // 투자자 처리: 잔액 차감 + 총 투자액 업데이트
+        // 3단계: 사용자 잔액 업데이트
         console.log('💳 사용자 잔액 업데이트...');
         await UserModel.updateBalance(username, user.balance - amount);
         await UserModel.addInvestment(username, { contentId, amount });
         console.log('✅ 사용자 잔액 업데이트 완료');
         
-        // 업데이트된 사용자 정보
+        // 4단계: 계수 기반 효과적 지분 계산 (안전한 버전)
+        let userCoefficient = 1.0;
+        let finalCoefficient = 1.0;
+        let effectiveAmount = amount;
+        let coefficientUpdated = false;
+        
+        try {
+            console.log('🔄 계수 기반 지분 계산 시작...');
+            const coeffTimeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('계수 계산 타임아웃')), 3000)
+            );
+            
+            // 사용자 계수 조회
+            const coeffPromise = coefficientCalculator.getUserCoefficient(username);
+            userCoefficient = await Promise.race([coeffPromise, coeffTimeoutPromise]);
+            
+            // 효과적 투자 금액 업데이트
+            await coefficientCalculator.updateInvestmentEffectiveAmount(investment.id, username, amount);
+            effectiveAmount = amount * userCoefficient;
+            
+            console.log(`🔄 ${username} 계수: ${userCoefficient.toFixed(4)}, 효과적 금액: ${effectiveAmount.toFixed(2)}`);
+            
+            // 투자자 성과 업데이트 (제한적으로)
+            try {
+                const newInvestorPerformance = await UserModel.calculateUserPerformance(username);
+                await UserModel.updateCoefficient(username, newInvestorPerformance, 'investment_made');
+                console.log(`🔄 투자자 ${username} 계수 업데이트: ${newInvestorPerformance.toFixed(4)}`);
+                
+                finalCoefficient = newInvestorPerformance;
+                coefficientUpdated = true;
+                
+            } catch (perfError) {
+                console.error('⚠️ 성과 계수 업데이트 실패:', perfError.message);
+                finalCoefficient = userCoefficient;
+            }
+            
+            // 캐시 무효화
+            coefficientCalculator.invalidateCache(username);
+            console.log('✅ 계수 계산 완료!');
+            
+        } catch (coeffError) {
+            console.error('⚠️ 계수 계산 실패, 기본값 사용:', coeffError.message);
+            userCoefficient = 1.0;
+            finalCoefficient = 1.0;
+            effectiveAmount = amount;
+        }
+        
+        // 5단계: 최종 사용자 정보 조회
         const updatedUser = await UserModel.findByUsername(username);
         
-        console.log(`✅ 투자 완료: ${username} -> 컨텐츠 ${contentId}, 금액: ${amount}`);
+        console.log(`✅ 고급 투자 완료: ${username} -> 컨텐츠 ${contentId}, 금액: ${amount}, 효과적: ${effectiveAmount.toFixed(2)}`);
         
         res.json({ 
             success: true, 
             investment,
             newBalance: updatedUser.balance,
-            userCoefficient: 1.0,
-            effectiveAmount: amount,
-            dividendsDistributed: [],
-            coefficientUpdated: false,
-            message: `${amount} 코인 투자 완료! 새 잔액: ${updatedUser.balance}`
+            userCoefficient: finalCoefficient,
+            effectiveAmount: effectiveAmount,
+            dividendsDistributed: dividendDistribution,
+            coefficientUpdated: coefficientUpdated,
+            dividendError: dividendError,
+            message: `${amount} 코인 투자 완료! (효과적 지분: ${effectiveAmount.toFixed(2)}, 계수: ×${finalCoefficient.toFixed(4)}) 새 잔액: ${updatedUser.balance}`
         });
         
     } catch (error) {
