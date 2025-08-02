@@ -84,10 +84,10 @@
             if (result && result.success && this.localChain) {
                 this.addInvestmentBlock(contentId, amount, result);
                 
-                // 서버 데이터와 비교 검증
-                setTimeout(() => {
-                    this.verifyServerData();
-                }, 500);
+                // 서버 데이터와 비교 검증 (일시 정지)
+                // setTimeout(() => {
+                //     this.verifyServerData();
+                // }, 500);
             }
             
             return result;
@@ -117,21 +117,11 @@
         return null;
     };
 
-    // 서버 데이터와 로컬 체인 비교
+    // 서버 데이터와 로컬 체인 비교 (일시 정지)
     LaborValueCoinSystem.prototype.verifyServerData = async function() {
-        if (!this.localChain || !this.currentUser) {
-            console.warn('⚠️ 로컬 체인 또는 사용자 정보가 없습니다.');
-            return;
-        }
-
-        // 동기화 진행 중이면 중복 실행 방지
-        if (this.isSyncing) {
-            console.log('🔄 동기화 진행 중이므로 검증을 건너뜁니다.');
-            return;
-        }
-
-        console.log('🔍 서버 데이터 검증 시작...');
-        
+        // 데이터 불일치 감지 기능 일시 정지
+        console.log('🚫 데이터 불일치 감지 기능이 일시 정지되었습니다.');
+        return { verified: true, message: '검증 비활성화' };
         if (!this.localChain) {
             console.warn('⚠️ 로컬 체인이 초기화되지 않음');
             alert('로컬 체인이 초기화되지 않았습니다. 다시 로그인해주세요.');
