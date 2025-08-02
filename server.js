@@ -285,6 +285,8 @@ app.post('/api/invest', async (req, res) => {
         
         try {
             console.log('💰 배당 분배 계산 시작...');
+            console.log(`💰 배당 분배 대상 컨텐츠: ${contentId}, 신규 투자액: ${amount}`);
+            
             const timeoutPromise = new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('배당 계산 타임아웃')), 5000)
             );
@@ -293,31 +295,44 @@ app.post('/api/invest', async (req, res) => {
             dividendDistribution = await Promise.race([dividendPromise, timeoutPromise]);
             
             console.log(`💰 배당 분배 계산 완료: ${dividendDistribution.length}명`);
+            console.log('💰 배당 분배 상세:', dividendDistribution.map(d => `${d.username}: ${d.amount}`));
+            
+            if (dividendDistribution.length === 0) {
+                console.log('💰 배당 대상자 없음 - 계수 업데이트 건너뜀');
+            }
             
             // 배당 지급 (각각 안전하게 처리)
             for (const dividend of dividendDistribution) {
                 try {
+                    console.log(`💰 배당 지급 시작: ${dividend.username} +${dividend.amount}`);
                     await UserModel.addDividend(dividend.username, dividend.amount);
-                    console.log(`💰 배당 지급: ${dividend.username} +${dividend.amount}`);
+                    console.log(`💰 배당 지급 완료: ${dividend.username} +${dividend.amount}`);
                     
                     // 배당 받을 때마다 투자 신용도 강제 업데이트
                     try {
+                        console.log(`🎯 ${dividend.username} 계수 업데이트 시작...`);
                         const newPerformance = await UserModel.calculateUserPerformance(dividend.username);
+                        console.log(`🎯 ${dividend.username} 기본 성과: ${newPerformance.toFixed(4)}`);
+                        
                         // 배당 받은 경우 소폭 보너스 적용 (기존 계수에서 +0.01~0.05)
                         const dividendBonus = Math.min(dividend.amount / 1000, 0.05); // 배당액에 비례한 보너스 (최대 0.05)
                         const adjustedPerformance = Math.min(newPerformance + dividendBonus, 3.0);
+                        console.log(`🎯 ${dividend.username} 보너스 적용 후: ${adjustedPerformance.toFixed(4)} (보너스: +${dividendBonus.toFixed(4)})`);
                         
                         await UserModel.updateCoefficient(dividend.username, adjustedPerformance, 'dividend_received');
-                        console.log(`🎯 배당 수령자 ${dividend.username} 계수 업데이트: ${adjustedPerformance.toFixed(4)} (보너스: +${dividendBonus.toFixed(4)})`);
+                        console.log(`🎯 배당 수령자 ${dividend.username} 계수 업데이트 완료: ${adjustedPerformance.toFixed(4)}`);
                         
                         // 캐시 무효화
                         coefficientCalculator.invalidateCache(dividend.username);
+                        console.log(`🎯 ${dividend.username} 캐시 무효화 완료`);
                     } catch (coeffError) {
                         console.error(`⚠️ 배당 수령자 계수 업데이트 실패 (${dividend.username}):`, coeffError.message);
+                        console.error('⚠️ 계수 업데이트 오류 스택:', coeffError.stack);
                     }
                     
                 } catch (dividendPayError) {
                     console.error(`⚠️ 배당 지급 실패 (${dividend.username}):`, dividendPayError.message);
+                    console.error('⚠️ 배당 지급 오류 스택:', dividendPayError.stack);
                 }
             }
             

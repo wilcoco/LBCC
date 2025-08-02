@@ -103,28 +103,7 @@ class CoefficientCalculator {
         return result.rows;
     }
 
-    /**
-     * 배당 분배 계산
-     */
-    async calculateDividendDistribution(contentId, newInvestmentAmount) {
-        const effectiveShares = await this.getEffectiveShares(contentId);
-        const dividends = [];
-        
-        effectiveShares.forEach(share => {
-            const dividendAmount = Math.floor(newInvestmentAmount * share.share);
-            if (dividendAmount > 0) {
-                dividends.push({
-                    username: share.username,
-                    amount: dividendAmount,
-                    share: share.share,
-                    coefficient: share.coefficient,
-                    effectiveAmount: share.effectiveAmount
-                });
-            }
-        });
-        
-        return dividends;
-    }
+
 
     /**
      * 투자 후 효과적 지분 업데이트
