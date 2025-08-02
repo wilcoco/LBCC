@@ -17,7 +17,7 @@ class CoefficientCalculator {
         const cacheKey = `coeff_${username}`;
         const cached = this.userCoefficientCache.get(cacheKey);
         
-        if (cached && (Date.now() - cached.timestamp) < 300000) { // 5분 캐시
+        if (cached && (Date.now() - cached.timestamp) < 60000) { // 1분 캐시로 단축
             return cached.coefficient;
         }
 

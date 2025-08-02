@@ -346,8 +346,14 @@ class UserModel {
     console.log(`📊 ${username} 투자 기록: ${result.rows.length}건`);
     
     if (result.rows.length === 0) {
-        console.log(`⚠️ ${username} 투자 기록 없음 - 기본 계수 1.0 반환`);
+        console.log(`⚠️ ${username} 투자 기록 없음 - 신규 사용자 계수 1.0 반환`);
         return 1.0; // 기본 계수
+    }
+    
+    // 신규 투자자 보너스 (투자 횟수가 적은 경우)
+    if (result.rows.length < 3) {
+        console.log(`🆕 ${username} 신규 투자자 - 학습 보너스 적용`);
+        return 1.1; // 신규 투자자 보너스
     }
     
     // 투자 매력도 지수 계산
@@ -363,8 +369,8 @@ class UserModel {
         
         console.log(`  📈 투자 ${index + 1}: ${investment.amount}코인 → +${investment.subsequent_investments}코인 (비율: ${attractionRate.toFixed(2)})`);
         
-        // 좋은 투자 카운트 (후속 투자가 원래 투자의 50% 이상)
-        if (attractionRate >= 0.5) {
+        // 좋은 투자 카운트 (후속 투자가 원래 투자의 30% 이상으로 완화)
+        if (attractionRate >= 0.3) {
             goodInvestments++;
         }
         
@@ -379,15 +385,17 @@ class UserModel {
     console.log(`  - 평균 매력도: ${averagePerformance.toFixed(4)}`);
     console.log(`  - 성공률: ${(successRate * 100).toFixed(1)}% (${goodInvestments}/${totalInvestments})`);
     
-    // 개선된 계수 계산: 평균 성과 + 성공률 보너스
-    let baseCoefficient = 0.8 + (averagePerformance * 0.4); // 0.8 ~ 1.2 기본 범위
-    let successBonus = successRate * 0.5; // 최대 0.5 보너스
-    let finalCoefficient = baseCoefficient + successBonus;
+    // 개선된 계수 계산: 평균 성과 + 성공률 보너스 + 활동성 보너스
+    let baseCoefficient = 0.9 + (averagePerformance * 0.3); // 0.9 ~ 1.2 기본 범위
+    let successBonus = successRate * 0.4; // 최대 0.4 보너스
+    let activityBonus = Math.min(totalInvestments / 10, 0.2); // 활동성 보너스 (최대 0.2)
     
-    // 계수 범위 제한 (0.1 ~ 5.0)
-    finalCoefficient = Math.max(0.1, Math.min(5.0, finalCoefficient));
+    let finalCoefficient = baseCoefficient + successBonus + activityBonus;
     
-    console.log(`🎯 ${username} 최종 계수: ${finalCoefficient.toFixed(4)} (기본: ${baseCoefficient.toFixed(4)} + 보너스: ${successBonus.toFixed(4)})`);
+    // 계수 범위 제한 (0.5 ~ 3.0으로 조정)
+    finalCoefficient = Math.max(0.5, Math.min(3.0, finalCoefficient));
+    
+    console.log(`🎯 ${username} 최종 계수: ${finalCoefficient.toFixed(4)} (기본: ${baseCoefficient.toFixed(4)} + 성공: ${successBonus.toFixed(4)} + 활동: ${activityBonus.toFixed(4)})`);
     
     return finalCoefficient;
 }
