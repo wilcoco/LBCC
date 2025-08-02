@@ -469,8 +469,17 @@ app.get('/api/users/:username', async (req, res) => {
         
         console.log(`✅ User info retrieved: ${username}`);
         
+        // 프론트엔드에서 기대하는 형식으로 데이터 구성
         const { password, ...userInfo } = user;
-        res.json(userInfo);
+        const responseData = {
+            ...userInfo,
+            currentCoefficient: user.coefficient || 1.0, // 프론트엔드에서 기대하는 필드
+            totalInvested: user.total_invested || 0,
+            totalDividends: user.total_dividends || 0
+        };
+        
+        console.log(`📊 ${username} 계수 정보 포함: ${responseData.currentCoefficient}`);
+        res.json(responseData);
         
     } catch (error) {
         console.error(`❌ User info error (${req.params.username}):`, error);
