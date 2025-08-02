@@ -308,19 +308,21 @@ app.post('/api/invest', async (req, res) => {
                     await UserModel.addDividend(dividend.username, dividend.amount);
                     console.log(`💰 배당 지급 완료: ${dividend.username} +${dividend.amount}`);
                     
-                    // 배당 받을 때마다 투자 신용도 강제 업데이트
+                    // 배당 받을 때마다 투자 신용도 +1 증가 (단순화)
                     try {
                         console.log(`🎯 ${dividend.username} 계수 업데이트 시작...`);
-                        const newPerformance = await UserModel.calculateUserPerformance(dividend.username);
-                        console.log(`🎯 ${dividend.username} 기본 성과: ${newPerformance.toFixed(4)}`);
                         
-                        // 배당 받은 경우 소폭 보너스 적용 (기존 계수에서 +0.01~0.05)
-                        const dividendBonus = Math.min(dividend.amount / 1000, 0.05); // 배당액에 비례한 보너스 (최대 0.05)
-                        const adjustedPerformance = Math.min(newPerformance + dividendBonus, 3.0);
-                        console.log(`🎯 ${dividend.username} 보너스 적용 후: ${adjustedPerformance.toFixed(4)} (보너스: +${dividendBonus.toFixed(4)})`);
+                        // 현재 사용자 정보 가져오기
+                        const currentUser = await UserModel.findByUsername(dividend.username);
+                        const currentCoefficient = currentUser ? currentUser.coefficient : 1.0;
                         
-                        await UserModel.updateCoefficient(dividend.username, adjustedPerformance, 'dividend_received');
-                        console.log(`🎯 배당 수령자 ${dividend.username} 계수 업데이트 완료: ${adjustedPerformance.toFixed(4)}`);
+                        // 배당 받으면 계수 +1 (최대 10.0으로 제한)
+                        const newCoefficient = Math.min(currentCoefficient + 1.0, 10.0);
+                        
+                        console.log(`🎯 ${dividend.username} 계수 변경: ${currentCoefficient.toFixed(2)} → ${newCoefficient.toFixed(2)} (+1.0)`);
+                        
+                        await UserModel.updateCoefficient(dividend.username, newCoefficient, 'dividend_received');
+                        console.log(`🎯 배당 수령자 ${dividend.username} 계수 업데이트 완료: ${newCoefficient.toFixed(2)}`);
                         
                         // 캐시 무효화
                         coefficientCalculator.invalidateCache(dividend.username);
