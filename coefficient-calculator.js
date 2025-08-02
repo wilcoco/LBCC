@@ -294,18 +294,20 @@ class CoefficientCalculator {
             
             for (const share of shares) {
                 const dividendRatio = share.effectiveAmount / totalEffectiveInvestment;
-                const dividendAmount = Math.floor(dividendPool * dividendRatio);
+                // 최소 1코인 배당 보장 (Math.floor 대신 Math.max 사용)
+                const calculatedDividend = dividendPool * dividendRatio;
+                const dividendAmount = Math.max(1, Math.floor(calculatedDividend));
                 
-                if (dividendAmount > 0) {
-                    distributions.push({
-                        username: share.username,
-                        amount: dividendAmount,
-                        ratio: dividendRatio,
-                        effectiveShare: share.effectiveAmount
-                    });
-                    
-                    console.log(`💰 배당 분배: ${share.username} +${dividendAmount} (비율: ${(dividendRatio * 100).toFixed(2)}%)`);
-                }
+                console.log(`💰 배당 계산: ${share.username} - 계산값: ${calculatedDividend.toFixed(2)}, 실제 지급: ${dividendAmount}`);
+                
+                distributions.push({
+                    username: share.username,
+                    amount: dividendAmount,
+                    ratio: dividendRatio,
+                    effectiveShare: share.effectiveAmount
+                });
+                
+                console.log(`💰 배당 분배: ${share.username} +${dividendAmount} (비율: ${(dividendRatio * 100).toFixed(2)}%)`);
             }
             
             console.log(`✅ 배당 분배 완료: ${distributions.length}명에게 총 ${distributions.reduce((sum, d) => sum + d.amount, 0)} 배당`);

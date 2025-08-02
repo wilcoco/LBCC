@@ -306,16 +306,20 @@ class UserModel {
         const boundedCoefficient = Math.max(0.01, Math.min(100, newCoefficient));
         
         // 계수 업데이트
-        await client.query(
+        const updateResult = await client.query(
             'UPDATE users SET coefficient = $1, coefficient_updated_at = CURRENT_TIMESTAMP WHERE username = $2',
             [boundedCoefficient, username]
         );
         
+        console.log(`🔄 DB 계수 업데이트 결과: ${username} - 영향받은 행: ${updateResult.rowCount}`);
+        
         // 히스토리 기록
-        await client.query(
+        const historyResult = await client.query(
             'INSERT INTO coefficient_history (username, old_coefficient, new_coefficient, reason, performance_score) VALUES ($1, $2, $3, $4, $5)',
             [username, oldCoefficient, boundedCoefficient, reason, performanceScore]
         );
+        
+        console.log(`📜 계수 히스토리 기록 완료: ${username} ${oldCoefficient} → ${boundedCoefficient}`);
         
         return boundedCoefficient;
     }
