@@ -299,6 +299,23 @@ app.post('/api/invest', async (req, res) => {
                 try {
                     await UserModel.addDividend(dividend.username, dividend.amount);
                     console.log(`💰 배당 지급: ${dividend.username} +${dividend.amount}`);
+                    
+                    // 배당 받을 때마다 투자 신용도 강제 업데이트
+                    try {
+                        const newPerformance = await UserModel.calculateUserPerformance(dividend.username);
+                        // 배당 받은 경우 소폭 보너스 적용 (기존 계수에서 +0.01~0.05)
+                        const dividendBonus = Math.min(dividend.amount / 1000, 0.05); // 배당액에 비례한 보너스 (최대 0.05)
+                        const adjustedPerformance = Math.min(newPerformance + dividendBonus, 3.0);
+                        
+                        await UserModel.updateCoefficient(dividend.username, adjustedPerformance, 'dividend_received');
+                        console.log(`🎯 배당 수령자 ${dividend.username} 계수 업데이트: ${adjustedPerformance.toFixed(4)} (보너스: +${dividendBonus.toFixed(4)})`);
+                        
+                        // 캐시 무효화
+                        coefficientCalculator.invalidateCache(dividend.username);
+                    } catch (coeffError) {
+                        console.error(`⚠️ 배당 수령자 계수 업데이트 실패 (${dividend.username}):`, coeffError.message);
+                    }
+                    
                 } catch (dividendPayError) {
                     console.error(`⚠️ 배당 지급 실패 (${dividend.username}):`, dividendPayError.message);
                 }
