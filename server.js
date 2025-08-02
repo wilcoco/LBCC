@@ -316,17 +316,17 @@ app.post('/api/invest', async (req, res) => {
                         const currentUser = await UserModel.findByUsername(dividend.username);
                         const currentCoefficient = currentUser ? currentUser.coefficient : 1.0;
                         
-                        // 배당 받으면 계수 +1 (최대 10.0으로 제한)
-                        const newCoefficient = Math.min(currentCoefficient + 1.0, 10.0);
+                        // 배당 받으면 계수 +0.005 (최대 10.0으로 제한)
+                        const newCoefficient = Math.min(currentCoefficient + 0.005, 10.0);
                         
-                        console.log(`🎯 ${dividend.username} 계수 변경: ${currentCoefficient.toFixed(2)} → ${newCoefficient.toFixed(2)} (+1.0)`);
+                        console.log(`🎯 ${dividend.username} 계수 변경: ${currentCoefficient.toFixed(3)} → ${newCoefficient.toFixed(3)} (+0.005)`);
                         
                         await UserModel.updateCoefficient(dividend.username, newCoefficient, 'dividend_received');
-                        console.log(`🎯 배당 수령자 ${dividend.username} 계수 업데이트 완료: ${newCoefficient.toFixed(2)}`);
+                        console.log(`🎯 배당 수령자 ${dividend.username} 계수 업데이트 완료: ${newCoefficient.toFixed(3)}`);
                         
                         // 캐시 무효화
                         coefficientCalculator.invalidateCache(dividend.username);
-                        console.log(`🎯 ${dividend.username} 캐시 무효화 완료`);
+                        console.log(`🎯 ${dividend.username} 캐시 무효화 완룼`);
                     } catch (coeffError) {
                         console.error(`⚠️ 배당 수령자 계수 업데이트 실패 (${dividend.username}):`, coeffError.message);
                         console.error('⚠️ 계수 업데이트 오류 스택:', coeffError.stack);
